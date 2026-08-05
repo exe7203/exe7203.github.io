@@ -15,7 +15,11 @@ interface BeforeInstallPromptEvent extends Event {
 
 function getStatusCopy(result: ParsedDispatch) {
   if (result.status === "ready") {
-    return { label: "可以導航", detail: "門牌資料完整", tone: "ready" };
+    return {
+      label: "可以導航",
+      detail: result.kind === "coordinates" ? "座標資料完整" : "門牌資料完整",
+      tone: "ready",
+    };
   }
   if (result.status === "invalid") {
     return { label: "無法導航", detail: "請補上地址", tone: "invalid" };
@@ -361,7 +365,11 @@ export default function Home() {
           >
           <div className="section-heading result-heading">
             <h2 id="result-title">
-              {result.kind === "landmark" ? "要搜尋的地標" : "要導航的地址"}
+              {result.kind === "coordinates"
+                ? "要導航的座標"
+                : result.kind === "landmark"
+                  ? "要搜尋的地標"
+                  : "要導航的地址"}
             </h2>
             <div className={`status-badge ${statusCopy.tone}`}>
               <span>{statusCopy.label}</span>
@@ -450,7 +458,7 @@ export default function Home() {
             </button>
           )}
           <p className="maps-disclosure">
-            按下後，只有上方確認過的地址會交給 Google Maps。
+            按下後，只有上方確認過的目的地會交給 Google Maps。
           </p>
           </section>
         )}
