@@ -236,7 +236,7 @@ export default function Home() {
       ...current,
       query: value,
       mapsUrl: buildMapsUrl(value),
-      status: value.trim().length >= 3 ? "review" : "invalid",
+      status: value.trim().length >= 2 ? "review" : "invalid",
     }));
   }
 

@@ -334,7 +334,7 @@ export function parseDispatch(
   } else if (landmarkWords.test(query)) {
     kind = "landmark";
     warnings.push("這是地標／方位描述，請先確認 Google Maps 搜尋結果");
-  } else if (query.length < 3) {
+  } else if (query.length < 2) {
     status = "invalid";
     warnings.push("找不到足以導航的地址或地標");
   } else {

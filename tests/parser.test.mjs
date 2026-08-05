@@ -50,6 +50,16 @@ test("preserves landmark direction text without inventing a street name", () => 
   assert.equal(canQuickNavigate(result), false);
 });
 
+test("keeps two-character landmark shorthand available for manual map search", () => {
+  const result = parseDispatch("*TG/巨六🐟回20", "台中市");
+
+  assert.equal(result.query, "巨六");
+  assert.equal(result.status, "review");
+  assert.equal(result.kind, "unknown");
+  assert.equal(canQuickNavigate(result), false);
+  assert.match(result.mapsUrl, /destination=%E5%B7%A8%E5%85%AD/u);
+});
+
 test("does not add a city unless the setting is enabled", () => {
   const result = parseDispatch("*BB/中區光復路13號💣回20", "");
   assert.equal(result.query, "中區光復路13號");
