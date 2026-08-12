@@ -1,4 +1,4 @@
-const APP_CACHE = "quicknav-app-v2";
+const APP_CACHE = "quicknav-app-v3";
 const SHARE_CACHE = "quicknav-private-share-v2";
 const SHARE_MAX_AGE_MS = 5 * 60 * 1000;
 const APP_SHELL = [
@@ -36,6 +36,17 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim()),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (
+    event.data?.type !== "CACHE_APP_ASSETS" ||
+    !Array.isArray(event.data.urls)
+  ) {
+    return;
+  }
+
+  event.waitUntil(cacheAppAssets(event.data.urls));
 });
 
 self.addEventListener("fetch", (event) => {
@@ -84,6 +95,30 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+async function cacheAppAssets(urls) {
+  const safeUrls = urls
+    .slice(0, 80)
+    .map((value) => {
+      try {
+        return new URL(String(value), self.location.origin);
+      } catch {
+        return null;
+      }
+    })
+    .filter((url) => url?.origin === self.location.origin);
+
+  const cache = await caches.open(APP_CACHE);
+  await Promise.allSettled(
+    safeUrls.map(async (url) => {
+      const request = new Request(url, { credentials: "same-origin" });
+      const response = await fetch(request);
+      if (response.ok) {
+        await cache.put(request, response);
+      }
+    }),
+  );
+}
 
 async function handleSharedText(request) {
   const formData = await request.formData();
