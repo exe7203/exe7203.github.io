@@ -222,7 +222,7 @@ function findDmsCoordinates(input: string): {
 
 export function buildMapsUrl(query: string): string {
   const destination = encodeURIComponent(query.trim());
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving&dir_action=navigate`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
 }
 
 export function canQuickNavigate(result: ParsedDispatch): boolean {

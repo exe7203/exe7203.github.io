@@ -4,7 +4,7 @@ import "./globals.css";
 
 const title = "快導｜派單文字導航助手";
 const description =
-  "複製派單後按一次：完整門牌直接開啟 Google Maps，有疑慮才停下確認。";
+  "複製派單後按右下角貼上：整理地址、保留最近紀錄，再自行開啟 Google Maps 路線。";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -62,7 +62,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: socialImage,
           width: 1731,
           height: 909,
-          alt: "快導：複製後，一鍵開啟導航",
+          alt: "快導：貼上派單後整理地址並確認路線",
         },
       ],
     },

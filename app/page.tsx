@@ -1,16 +1,58 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildMapsUrl,
   canQuickNavigate,
   parseDispatch,
   type ParsedDispatch,
 } from "./lib/parse-dispatch";
+import {
+  ADDRESS_HISTORY_LIMIT,
+  ADDRESS_HISTORY_STORAGE_KEY,
+  addAddressHistoryEntry,
+  type AddressHistoryEntry,
+  readAddressHistory,
+  removeAddressHistoryEntry,
+  serializeAddressHistory,
+} from "./lib/address-history";
+import { buildDriverHandoff } from "./lib/driver-handoff";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function warmAppResources(registration: ServiceWorkerRegistration) {
+  const urls = Array.from(
+    document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
+      'script[src], link[rel="stylesheet"][href], link[rel="modulepreload"][href]',
+    ),
+  )
+    .map((element) =>
+      element instanceof HTMLScriptElement ? element.src : element.href,
+    )
+    .filter((value) => {
+      try {
+        return new URL(value, window.location.href).origin === window.location.origin;
+      } catch {
+        return false;
+      }
+    });
+
+  registration.active?.postMessage({
+    type: "CACHE_APP_ASSETS",
+    urls: [...new Set(urls)],
+  });
+}
+
+function formatHistoryTime(savedAt: number) {
+  return new Intl.DateTimeFormat("zh-TW", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(savedAt));
 }
 
 function getStatusCopy(result: ParsedDispatch) {
@@ -31,7 +73,7 @@ export default function Home() {
   const [defaultCity, setDefaultCity] = useState("台中市");
   const [raw, setRaw] = useState("");
   const [result, setResult] = useState(() => parseDispatch("", "台中市"));
-  const [notice, setNotice] = useState("請先複製派單文字，再按上方按鈕");
+  const [notice, setNotice] = useState("請先複製派單文字，再按右下角的「貼」");
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -39,6 +81,9 @@ export default function Home() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualPasteShouldNavigate, setManualPasteShouldNavigate] =
     useState(false);
+  const [addressHistory, setAddressHistory] = useState<AddressHistoryEntry[]>([]);
+  const historyReadyRef = useRef(false);
+  const resultCardRef = useRef<HTMLElement>(null);
 
   const parseText = useCallback(
     (text: string) => {
@@ -49,6 +94,61 @@ export default function Home() {
     },
     [defaultCity],
   );
+
+  const rememberAddress = useCallback((parsed: ParsedDispatch) => {
+    if (parsed.status === "invalid" || parsed.query.trim().length < 2) return;
+    setAddressHistory((current) =>
+      addAddressHistoryEntry(current, parsed.query),
+    );
+  }, []);
+
+  const revealResult = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        resultCardRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const restoreHistoryTimer = window.setTimeout(() => {
+      let storedHistory: AddressHistoryEntry[] = [];
+      try {
+        storedHistory = readAddressHistory(
+          window.localStorage.getItem(ADDRESS_HISTORY_STORAGE_KEY),
+        );
+      } catch {
+        // The app remains usable if this browser blocks device-local storage.
+      }
+
+      setAddressHistory((current) => {
+        if (current.length === 0) return storedHistory;
+        const currentIds = new Set(current.map((item) => item.id));
+        return [
+          ...current,
+          ...storedHistory.filter((item) => !currentIds.has(item.id)),
+        ].slice(0, ADDRESS_HISTORY_LIMIT);
+      });
+      historyReadyRef.current = true;
+    }, 0);
+
+    return () => window.clearTimeout(restoreHistoryTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!historyReadyRef.current) return;
+    try {
+      window.localStorage.setItem(
+        ADDRESS_HISTORY_STORAGE_KEY,
+        serializeAddressHistory(addressHistory),
+      );
+    } catch {
+      // Parsing and navigation still work when private browsing blocks storage.
+    }
+  }, [addressHistory]);
 
   useEffect(() => {
     let restoreCityTimer: number | undefined;
@@ -77,7 +177,8 @@ export default function Home() {
       if (!("serviceWorker" in navigator)) return;
       try {
         await navigator.serviceWorker.register("/sw.js");
-        await navigator.serviceWorker.ready;
+        const readyRegistration = await navigator.serviceWorker.ready;
+        warmAppResources(readyRegistration);
 
         if (new URLSearchParams(window.location.search).has("share-target")) {
           const response = await fetch("/__shared_text__", {
@@ -92,19 +193,13 @@ export default function Home() {
               );
               setRaw(payload.text);
               setResult(sharedResult);
+              rememberAddress(sharedResult);
               if (canQuickNavigate(sharedResult)) {
-                setNotice("地址完整，正在開啟 Google Maps");
-                window.location.assign(sharedResult.mapsUrl);
-                return;
+                setNotice("地址完整，請確認後選擇司機端或 Google Maps");
+              } else {
+                setNotice("分享文字需要確認，已停在解析結果");
               }
-              setNotice("分享文字需要確認，已停在解析結果");
-              window.setTimeout(
-                () =>
-                  document
-                    .getElementById("result-card")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                0,
-              );
+              revealResult();
             }
           }
           window.history.replaceState({}, "", "/");
@@ -124,9 +219,13 @@ export default function Home() {
       }
       window.removeEventListener("beforeinstallprompt", installHandler);
     };
-  }, [defaultCity]);
+  }, [defaultCity, rememberAddress, revealResult]);
 
   const statusCopy = useMemo(() => getStatusCopy(result), [result]);
+  const driverHandoff = useMemo(
+    () => buildDriverHandoff(raw, result.query),
+    [raw, result.query],
+  );
   const hasChanges =
     result.prefixes.length > 0 ||
     result.suffixes.length > 0 ||
@@ -178,20 +277,13 @@ export default function Home() {
     setManualPasteShouldNavigate(false);
 
     const parsed = parseText(text);
+    rememberAddress(parsed);
     if (canQuickNavigate(parsed)) {
-      setNotice("地址完整，正在開啟 Google Maps");
-      window.location.assign(parsed.mapsUrl);
-      return;
+      setNotice("地址完整，請確認後選擇司機端或 Google Maps");
+    } else {
+      setNotice("這筆有需要確認的內容，已先停下來讓你核對");
     }
-
-    setNotice("這筆有需要確認的內容，已先停下來讓你核對");
-    window.setTimeout(
-      () =>
-        document
-          .getElementById("result-card")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      0,
-    );
+    revealResult();
   }
 
   function handleManualPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -199,25 +291,45 @@ export default function Home() {
     if (!text) return;
     event.preventDefault();
     const parsed = parseText(text);
+    rememberAddress(parsed);
     if (manualPasteShouldNavigate && canQuickNavigate(parsed)) {
       setManualPasteShouldNavigate(false);
-      setNotice("地址完整，正在開啟 Google Maps");
-      window.location.assign(parsed.mapsUrl);
-      return;
+      setNotice("地址完整，請確認後選擇司機端或 Google Maps");
+    } else {
+      setManualPasteShouldNavigate(false);
+      setNotice(
+        canQuickNavigate(parsed)
+          ? "已貼上並完成解析，尚未開啟地圖"
+          : "這筆有需要確認的內容，已先停下來讓你核對",
+      );
     }
-    setManualPasteShouldNavigate(false);
-    setNotice(
-      canQuickNavigate(parsed)
-        ? "已貼上並完成解析，尚未開啟地圖"
-        : "這筆有需要確認的內容，已先停下來讓你核對",
-    );
+    revealResult();
   }
 
   function clearAll() {
     setRaw("");
     setResult(parseDispatch("", defaultCity));
-    setNotice("已清除，請貼上下一筆派單文字");
-    document.getElementById("dispatch-input")?.focus();
+    setShowManualInput(false);
+    setNotice("已清除目前內容；最近地址仍保留");
+  }
+
+  function loadHistoryEntry(entry: AddressHistoryEntry) {
+    const parsed = parseDispatch(entry.address, defaultCity);
+    setRaw(entry.address);
+    setResult(parsed);
+    setShowManualInput(false);
+    setNotice("已帶入最近地址，尚未開啟地圖");
+    revealResult();
+  }
+
+  function deleteHistoryEntry(id: string) {
+    setAddressHistory((current) => removeAddressHistoryEntry(current, id));
+    setNotice("已刪除這筆地址紀錄");
+  }
+
+  function clearAddressHistory() {
+    setAddressHistory([]);
+    setNotice("最近地址已全部清除，目前解析內容不受影響");
   }
 
   async function installApp() {
@@ -256,7 +368,7 @@ export default function Home() {
           <span className="privacy-pill">本機解析</span>
         </div>
         <p className="header-copy">
-          複製派單後點一下，系統會清理代碼並開啟導航；有疑慮才停下確認。
+          複製派單後點一下，系統會清理代碼並顯示路線；確認後再開始導航。
         </p>
         {!isStandalone && (
           <div className="install-row">
@@ -276,24 +388,31 @@ export default function Home() {
       <div className="content-stack">
         <section className="card input-card" aria-labelledby="input-title">
           <div className="section-heading">
-            <h2 id="input-title">開始導航</h2>
+            <h2 id="input-title">查看路線</h2>
             {raw && (
               <button className="text-button" onClick={clearAll} type="button">
-                清除
+                清除目前內容
               </button>
             )}
+          </div>
+
+          <div className="paste-guidance" id="paste-button-help">
+            <strong>先複製派單文字</strong>
+            <span>再按右下角的「貼」，只解析地址，不會自動開導航。</span>
           </div>
 
           <button
             className="quick-button"
             onClick={() => void handleQuickNavigate()}
             type="button"
+            aria-describedby="paste-button-help"
+            title="貼上剪貼簿並解析地址"
           >
             <span className="quick-button-icon" aria-hidden="true">
-              →
+              貼
             </span>
-            <span>
-              <strong>貼上並導航</strong>
+            <span className="quick-button-copy">
+              <strong>貼上看路線</strong>
               <small>使用剛複製的派單文字</small>
             </span>
           </button>
@@ -301,7 +420,7 @@ export default function Home() {
             補城市、括號異常或地標描述會先停下，避免導錯地點。
           </p>
 
-          {showManualInput || raw ? (
+          {showManualInput ? (
             <div className="manual-input-wrap">
               <label htmlFor="dispatch-input">手動貼上派單文字</label>
               <textarea
@@ -313,7 +432,7 @@ export default function Home() {
                   setNotice(
                     event.target.value.trim()
                       ? "已解析輸入內容，請確認下方結果"
-                      : "請先複製派單文字，再按上方按鈕",
+                      : "請先複製派單文字，再按右下角的「貼」",
                   );
                 }}
                 onPaste={handleManualPaste}
@@ -334,7 +453,7 @@ export default function Home() {
                 );
               }}
             >
-              無法自動貼上？改用手動貼上
+              {raw ? "查看或修改原始文字" : "無法自動貼上？改用手動貼上"}
             </button>
           )}
           <p className="notice" role="status" aria-live="polite">
@@ -360,6 +479,7 @@ export default function Home() {
         {raw.trim() && (
           <section
             id="result-card"
+            ref={resultCardRef}
             className="card result-card"
             aria-labelledby="result-title"
           >
@@ -378,7 +498,7 @@ export default function Home() {
           </div>
 
           <label className="destination-label" htmlFor="destination-input">
-            確認導航目的地
+            確認目的地
           </label>
           <textarea
             id="destination-input"
@@ -389,7 +509,7 @@ export default function Home() {
             aria-describedby="destination-help"
           />
           <p id="destination-help" className="helper-text">
-            可以先手動修正；內容不會上傳，分享文字讀取後即刪除。
+            可以先手動修正；交接資料放在網址片段，不會送到網站伺服器。
           </p>
 
           {result.warnings.length > 0 && (
@@ -448,24 +568,100 @@ export default function Home() {
           )}
 
           {result.status !== "invalid" ? (
-            <a className="maps-button" href={result.mapsUrl}>
-              <span>開啟 Google Maps</span>
-              <span aria-hidden="true">→</span>
-            </a>
+            <div className="result-actions">
+              {driverHandoff.ok ? (
+                <a className="driver-app-button" href={driverHandoff.appLinkUrl}>
+                  <span>開啟司機端開始跳錶</span>
+                  <span aria-hidden="true">→</span>
+                </a>
+              ) : (
+                <button
+                  className="driver-app-button disabled"
+                  disabled
+                  type="button"
+                >
+                  <span>{driverHandoff.message}</span>
+                </button>
+              )}
+              <a
+                className="maps-button"
+                href={result.mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>只在 Google Maps 顯示路線</span>
+                <span aria-hidden="true">↗</span>
+              </a>
+            </div>
           ) : (
             <button className="maps-button disabled" disabled type="button">
               請先輸入可導航文字
             </button>
           )}
           <p className="maps-disclosure">
-            按下後，只有上方確認過的目的地會交給 Google Maps。
+            未安裝司機端時會顯示說明頁；Google Maps 路線仍可照常使用。
           </p>
+          </section>
+        )}
+
+        {addressHistory.length > 0 && (
+          <section
+            className="card history-card"
+            aria-labelledby="history-title"
+          >
+            <div className="section-heading history-heading">
+              <div>
+                <h2 id="history-title">最近貼上的地址</h2>
+                <p>共 {addressHistory.length} 筆，只保留在這台裝置</p>
+              </div>
+              <button
+                className="text-button"
+                onClick={clearAddressHistory}
+                type="button"
+              >
+                清除紀錄
+              </button>
+            </div>
+            <ol className="history-list">
+              {addressHistory.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    className="history-address"
+                    type="button"
+                    onClick={() => loadHistoryEntry(entry)}
+                  >
+                    <strong>{entry.address}</strong>
+                    <small>{formatHistoryTime(entry.savedAt)} · 點一下帶回確認</small>
+                  </button>
+                  <div className="history-actions">
+                    <a
+                      className="history-map-button"
+                      href={buildMapsUrl(entry.address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`在 Google Maps 顯示 ${entry.address} 的路線`}
+                    >
+                      地圖
+                    </a>
+                    <button
+                      className="history-delete-button"
+                      type="button"
+                      onClick={() => deleteHistoryEntry(entry.id)}
+                      aria-label={`刪除 ${entry.address} 的紀錄`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </section>
         )}
 
         <footer>
           <span>內容只在本機解析</span>
-          <span>分享文字僅暫存至讀取完成</span>
+          <span>最近地址只保留在這台裝置</span>
+          <span>司機端交接片段不進入伺服器請求</span>
         </footer>
       </div>
     </main>

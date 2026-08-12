@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#0b0c0d" />
+    <title>開啟快導司機端</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+        background: #090a0b;
+        color: #f4f5f5;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 50% -10%, #35383b 0, transparent 38%),
+          #090a0b;
+      }
+
+      main {
+        width: min(100% - 32px, 520px);
+        margin: 0 auto;
+        padding: 42px 0 36px;
+      }
+
+      .brand {
+        margin: 0 0 8px;
+        color: #aeb3b7;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .18em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 8vw, 38px);
+        letter-spacing: -.04em;
+      }
+
+      .lead {
+        margin: 12px 0 24px;
+        color: #b8bdc1;
+        line-height: 1.65;
+      }
+
+      .card {
+        padding: 20px;
+        border: 1px solid #3b3e41;
+        border-radius: 18px;
+        background: linear-gradient(150deg, #1a1c1e, #111214);
+        box-shadow: 0 22px 55px rgb(0 0 0 / 36%);
+      }
+
+      .label {
+        margin: 0 0 7px;
+        color: #979da2;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      #destination {
+        min-height: 50px;
+        margin: 0 0 18px;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 750;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+
+      .button {
+        display: flex;
+        width: 100%;
+        min-height: 54px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 10px;
+        padding: 0 16px;
+        border: 1px solid #c8cdd1;
+        border-radius: 11px;
+        background: linear-gradient(135deg, #f5f6f6, #aeb4b8);
+        color: #08090a;
+        font: inherit;
+        font-weight: 850;
+        text-align: center;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .button.secondary {
+        border-color: #4b4f52;
+        background: #17191b;
+        color: #e7e9ea;
+      }
+
+      .button[aria-disabled="true"] {
+        opacity: .46;
+        pointer-events: none;
+      }
+
+      #status {
+        min-height: 48px;
+        margin: 16px 0 0;
+        padding-top: 15px;
+        border-top: 1px solid #34373a;
+        color: #aeb3b7;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .footnote {
+        margin: 18px 4px 0;
+        color: #7f858a;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">QUICKNAV DRIVER</p>
+      <h1>開啟快導司機端</h1>
+      <p class="lead">
+        如果司機端已安裝，點下方按鈕即可把這筆派單完整帶入；App 內仍會讓你確認目的地，不會直接開始計費。
+      </p>
+
+      <section class="card" aria-labelledby="destination-label">
+        <p class="label" id="destination-label">準備交接的目的地</p>
+        <p id="destination">正在檢查交接資料…</p>
+        <a class="button" id="open-app" href="#" aria-disabled="true">
+          再試一次開啟司機端
+        </a>
+        <a class="button secondary" id="open-maps" href="#" aria-disabled="true">
+          改用 Google Maps 查看路線
+        </a>
+        <a class="button secondary" href="/">返回快導重新確認</a>
+        <p id="status" role="status" aria-live="polite">
+          正在讀取資料。
+        </p>
+      </section>
+
+      <p class="footnote">
+        沒有跳轉通常代表尚未安裝司機端，或瀏覽器尚未允許開啟 App。此頁會保留，不會卡在空白畫面；尚未安裝時請先向車隊取得正式安裝版本。
+        派單內容只存在網址的 # 片段，不會隨此頁的 HTTP 請求送到網站伺服器。
+      </p>
+    </main>
+
+    <script>
+      (() => {
+        const MAX_DISPATCH_BYTES = 4096;
+        const MAX_DESTINATION_BYTES = 1024;
+        // Keep the same conservative ceiling as Google Maps URLs and the
+        // Android handoff parser so no browser or intent silently truncates it.
+        const MAX_HANDOFF_URL_LENGTH = 2048;
+        const encodedFragment = window.location.hash.startsWith("#")
+          ? window.location.hash.slice(1)
+          : "";
+        const fragmentParams = new URLSearchParams(encodedFragment);
+        const legacyQueryParams = new URLSearchParams(window.location.search);
+        const payloadNames = ["v", "dispatch", "destination"];
+        const fragmentHasPayload = payloadNames.some((name) =>
+          fragmentParams.has(name),
+        );
+        const queryHasPayload = payloadNames.some((name) =>
+          legacyQueryParams.has(name),
+        );
+        const params = fragmentHasPayload ? fragmentParams : legacyQueryParams;
+        const versionValues = params.getAll("v");
+        const dispatchValues = params.getAll("dispatch");
+        const destinationValues = params.getAll("destination");
+        const rawDispatch = dispatchValues.length === 1 ? dispatchValues[0] : "";
+        const destination = destinationValues.length === 1 ? destinationValues[0] : "";
+        const destinationElement = document.getElementById("destination");
+        const openApp = document.getElementById("open-app");
+        const openMaps = document.getElementById("open-maps");
+        const status = document.getElementById("status");
+        const byteLength = (value) => new TextEncoder().encode(value).length;
+        const malformedPercent = /%(?![0-9A-Fa-f]{2})/u;
+        const fragmentHasUnknownParameter = [...fragmentParams.keys()].some(
+          (name) => !payloadNames.includes(name),
+        );
+
+        const invalidReason = window.location.href.length > MAX_HANDOFF_URL_LENGTH
+          ? "交接網址編碼後過長，請返回快導縮短內容或改在司機端貼上。"
+          : fragmentHasPayload && queryHasPayload
+            ? "交接網址同時含有新舊格式，為避免資料混用已停止開啟。"
+          : fragmentHasPayload && fragmentHasUnknownParameter
+            ? "交接網址含有未支援欄位，請返回快導重新產生。"
+          : malformedPercent.test(
+                fragmentHasPayload ? encodedFragment : window.location.search,
+              )
+            ? "交接網址編碼不完整，請返回快導重新產生。"
+          : versionValues.length !== 1 || versionValues[0] !== "1"
+            ? "交接網址版本不正確，請返回快導重新產生。"
+          : !rawDispatch.trim() || !destination.trim()
+          ? "交接資料不完整，請返回快導重新解析。"
+          : rawDispatch.includes("\0") || destination.includes("\0")
+            ? "派單含有無法安全交接的控制字元，請返回快導重新輸入。"
+          : byteLength(rawDispatch) > MAX_DISPATCH_BYTES
+            ? "派單原文過長，為避免資料被截斷，請改在司機端手動貼上。"
+            : byteLength(destination) > MAX_DESTINATION_BYTES
+              ? "目的地內容過長，請返回快導縮短後再試。"
+              : "";
+
+        if (invalidReason) {
+          destinationElement.textContent = "無法安全交接";
+          status.textContent = invalidReason;
+          return;
+        }
+
+        destinationElement.textContent = destination;
+
+        const appUrl = new URL("quicknav://dispatch");
+        appUrl.searchParams.set("v", "1");
+        appUrl.searchParams.set("dispatch", rawDispatch);
+        appUrl.searchParams.set("destination", destination);
+        if (appUrl.toString().length > MAX_HANDOFF_URL_LENGTH) {
+          destinationElement.textContent = "無法安全交接";
+          status.textContent =
+            "派單內容編碼後過長，請改在司機端手動貼上。";
+          return;
+        }
+        openApp.href = appUrl.toString();
+        openApp.setAttribute("aria-disabled", "false");
+
+        const mapsUrl = new URL("https://www.google.com/maps/dir/");
+        mapsUrl.searchParams.set("api", "1");
+        mapsUrl.searchParams.set("destination", destination);
+        mapsUrl.searchParams.set("travelmode", "driving");
+        if (mapsUrl.toString().length > MAX_HANDOFF_URL_LENGTH) {
+          destinationElement.textContent = "無法安全交接";
+          status.textContent =
+            "Google Maps 網址編碼後過長，請返回快導縮短目的地。";
+          return;
+        }
+        openMaps.href = mapsUrl.toString();
+        openMaps.target = "_blank";
+        openMaps.rel = "noopener noreferrer";
+        openMaps.setAttribute("aria-disabled", "false");
+
+        status.textContent =
+          "資料已從網址片段讀取，不會送到本站伺服器；司機端會先顯示確認畫面。";
+        let handoffLocked = false;
+        openApp.addEventListener("click", (event) => {
+          if (handoffLocked) {
+            event.preventDefault();
+            return;
+          }
+          handoffLocked = true;
+          openApp.setAttribute("aria-disabled", "true");
+          status.textContent = "正在嘗試開啟司機端…";
+          window.setTimeout(() => {
+            handoffLocked = false;
+            openApp.setAttribute("aria-disabled", "false");
+            status.textContent =
+              "如果仍停在此頁，代表司機端尚未安裝或瀏覽器未允許開啟 App；你仍可改用 Google Maps。";
+          }, 1600);
+        });
+      })();
+    </script>
+  </body>
+</html>

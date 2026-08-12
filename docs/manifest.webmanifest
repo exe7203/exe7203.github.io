@@ -2,7 +2,7 @@
   "id": "/",
   "name": "快導｜派單文字導航助手",
   "short_name": "快導",
-  "description": "複製派單後點一下，清理代碼並開啟 Google Maps；有疑慮時先確認。",
+  "description": "複製派單後按右下角貼上，整理地址、保留最近紀錄，再自行開啟 Google Maps 路線。",
   "lang": "zh-Hant",
   "start_url": "/",
   "scope": "/",

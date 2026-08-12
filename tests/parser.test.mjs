@@ -384,6 +384,7 @@ test("builds an encoded Google Maps URL without an API key", () => {
   assert.match(url, /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&/u);
   assert.match(url, /destination=%E5%8F%B0%E4%B8%AD/u);
   assert.match(url, /travelmode=driving/u);
+  assert.doesNotMatch(url, /dir_action=navigate/u);
   assert.doesNotMatch(url, /key=/u);
 });
 
