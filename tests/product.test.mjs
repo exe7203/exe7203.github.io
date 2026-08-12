@@ -32,12 +32,12 @@ test("server-renders the production navigation assistant with an empty start sta
   const html = await response.text();
   assert.match(html, /<title>快導｜派單文字導航助手<\/title>/u);
   assert.match(html, /查看路線/u);
-  assert.match(html, /貼上看路線/u);
+  assert.match(html, /一鍵貼上解析/u);
+  assert.match(html, /按一次，直接貼上並解析/u);
   assert.match(html, /確認後再開始導航/u);
-  assert.match(html, /使用剛複製的派單文字/u);
-  assert.match(html, /再按右下角的「貼」/u);
-  assert.match(html, /無法自動貼上？改用手動貼上/u);
+  assert.match(html, /按一次就讀取剛複製的派單文字/u);
   assert.match(html, /manifest\.webmanifest/u);
+  assert.doesNotMatch(html, /手動貼上派單文字|司機端開始跳錶/u);
   assert.doesNotMatch(
     html,
     /codex-preview|react-loading-skeleton|直接測試這三種格式|第一版測試工具|已載入第一筆範例|台中市北區興進路205號/u,
@@ -103,7 +103,20 @@ test("pasted destinations are kept locally after the current input is cleared", 
   assert.doesNotMatch(historySource, /raw:/u);
 });
 
-test("confirmed destinations can hand off to the Flutter driver app", async () => {
+test("one button reads and parses the clipboard while manual input stays an error fallback", async () => {
+  const pageSource = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(pageSource, /const text = await readClipboardText\(\)/u);
+  assert.match(pageSource, /const parsed = parseText\(text\)/u);
+  assert.match(pageSource, /setShowManualInput\(true\)/u);
+  assert.match(pageSource, /瀏覽器沒有授權一鍵貼上/u);
+  assert.doesNotMatch(pageSource, /manualPasteShouldNavigate/u);
+});
+
+test("the driver-app handoff remains available in source while its home-page block is hidden", async () => {
   const pageSource = await readFile(
     new URL("../app/page.tsx", import.meta.url),
     "utf8",
@@ -113,11 +126,9 @@ test("confirmed destinations can hand off to the Flutter driver app", async () =
     "utf8",
   );
 
-  assert.match(pageSource, /buildDriverHandoff\(raw, result\.query\)/u);
-  assert.match(pageSource, /開啟司機端開始跳錶/u);
-  assert.match(pageSource, /交接資料放在網址片段，不會送到網站伺服器/u);
   assert.match(handoffSource, /https:\/\/exe7203\.github\.io/u);
   assert.match(handoffSource, /\/driver\/dispatch/u);
+  assert.doesNotMatch(pageSource, /buildDriverHandoff|開啟司機端開始跳錶/u);
   assert.doesNotMatch(pageSource, /window\.location\.assign/u);
 });
 

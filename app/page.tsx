@@ -16,7 +16,6 @@ import {
   removeAddressHistoryEntry,
   serializeAddressHistory,
 } from "./lib/address-history";
-import { buildDriverHandoff } from "./lib/driver-handoff";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -79,8 +78,8 @@ export default function Home() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
-  const [manualPasteShouldNavigate, setManualPasteShouldNavigate] =
-    useState(false);
+  const [clipboardBlocked, setClipboardBlocked] = useState(false);
+  const [isReadingClipboard, setIsReadingClipboard] = useState(false);
   const [addressHistory, setAddressHistory] = useState<AddressHistoryEntry[]>([]);
   const historyReadyRef = useRef(false);
   const resultCardRef = useRef<HTMLElement>(null);
@@ -195,7 +194,7 @@ export default function Home() {
               setResult(sharedResult);
               rememberAddress(sharedResult);
               if (canQuickNavigate(sharedResult)) {
-                setNotice("地址完整，請確認後選擇司機端或 Google Maps");
+                setNotice("地址完整，請確認後開啟 Google Maps");
               } else {
                 setNotice("分享文字需要確認，已停在解析結果");
               }
@@ -222,10 +221,6 @@ export default function Home() {
   }, [defaultCity, rememberAddress, revealResult]);
 
   const statusCopy = useMemo(() => getStatusCopy(result), [result]);
-  const driverHandoff = useMemo(
-    () => buildDriverHandoff(raw, result.query),
-    [raw, result.query],
-  );
   const hasChanges =
     result.prefixes.length > 0 ||
     result.suffixes.length > 0 ||
@@ -241,7 +236,8 @@ export default function Home() {
 
   async function readClipboardText(): Promise<string | null> {
     if (!navigator.clipboard?.readText) {
-      setNotice("這個瀏覽器不允許按鈕讀取剪貼簿，請長按輸入框貼上");
+      setClipboardBlocked(true);
+      setNotice("這個瀏覽器封鎖一鍵貼上，已開啟手動備援輸入框");
       setShowManualInput(true);
       window.setTimeout(
         () => document.getElementById("dispatch-input")?.focus(),
@@ -256,9 +252,11 @@ export default function Home() {
         setNotice("剪貼簿目前沒有文字");
         return null;
       }
+      setClipboardBlocked(false);
       return text;
     } catch {
-      setNotice("瀏覽器沒有取得貼上權限，請長按輸入框貼上");
+      setClipboardBlocked(true);
+      setNotice("瀏覽器沒有授權一鍵貼上，已開啟手動備援輸入框");
       setShowManualInput(true);
       window.setTimeout(
         () => document.getElementById("dispatch-input")?.focus(),
@@ -269,21 +267,24 @@ export default function Home() {
   }
 
   async function handleQuickNavigate() {
-    const text = await readClipboardText();
-    if (!text) {
-      setManualPasteShouldNavigate(true);
-      return;
-    }
-    setManualPasteShouldNavigate(false);
+    if (isReadingClipboard) return;
+    setIsReadingClipboard(true);
+    try {
+      const text = await readClipboardText();
+      if (!text) return;
 
-    const parsed = parseText(text);
-    rememberAddress(parsed);
-    if (canQuickNavigate(parsed)) {
-      setNotice("地址完整，請確認後選擇司機端或 Google Maps");
-    } else {
-      setNotice("這筆有需要確認的內容，已先停下來讓你核對");
+      const parsed = parseText(text);
+      rememberAddress(parsed);
+      setShowManualInput(false);
+      if (canQuickNavigate(parsed)) {
+        setNotice("已一鍵貼上並解析完成，請確認後開啟 Google Maps");
+      } else {
+        setNotice("已一鍵貼上；這筆有需要確認的內容，請先核對");
+      }
+      revealResult();
+    } finally {
+      setIsReadingClipboard(false);
     }
-    revealResult();
   }
 
   function handleManualPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -292,17 +293,11 @@ export default function Home() {
     event.preventDefault();
     const parsed = parseText(text);
     rememberAddress(parsed);
-    if (manualPasteShouldNavigate && canQuickNavigate(parsed)) {
-      setManualPasteShouldNavigate(false);
-      setNotice("地址完整，請確認後選擇司機端或 Google Maps");
-    } else {
-      setManualPasteShouldNavigate(false);
-      setNotice(
-        canQuickNavigate(parsed)
-          ? "已貼上並完成解析，尚未開啟地圖"
-          : "這筆有需要確認的內容，已先停下來讓你核對",
-      );
-    }
+    setNotice(
+      canQuickNavigate(parsed)
+        ? "已貼上並完成解析，請確認後開啟 Google Maps"
+        : "這筆有需要確認的內容，請先核對",
+    );
     revealResult();
   }
 
@@ -310,6 +305,7 @@ export default function Home() {
     setRaw("");
     setResult(parseDispatch("", defaultCity));
     setShowManualInput(false);
+    setClipboardBlocked(false);
     setNotice("已清除目前內容；最近地址仍保留");
   }
 
@@ -318,6 +314,7 @@ export default function Home() {
     setRaw(entry.address);
     setResult(parsed);
     setShowManualInput(false);
+    setClipboardBlocked(false);
     setNotice("已帶入最近地址，尚未開啟地圖");
     revealResult();
   }
@@ -397,8 +394,8 @@ export default function Home() {
           </div>
 
           <div className="paste-guidance" id="paste-button-help">
-            <strong>先複製派單文字</strong>
-            <span>再按右下角的「貼」，只解析地址，不會自動開導航。</span>
+            <strong>按一次，直接貼上並解析</strong>
+            <span>先複製派單文字，再按右下角的「貼」；不會自動開導航。</span>
           </div>
 
           <button
@@ -407,13 +404,14 @@ export default function Home() {
             type="button"
             aria-describedby="paste-button-help"
             title="貼上剪貼簿並解析地址"
+            disabled={isReadingClipboard}
           >
             <span className="quick-button-icon" aria-hidden="true">
               貼
             </span>
             <span className="quick-button-copy">
-              <strong>貼上看路線</strong>
-              <small>使用剛複製的派單文字</small>
+              <strong>{isReadingClipboard ? "正在貼上" : "一鍵貼上解析"}</strong>
+              <small>按一次就讀取剛複製的派單文字</small>
             </span>
           </button>
           <p className="quick-safety">
@@ -422,6 +420,11 @@ export default function Home() {
 
           {showManualInput ? (
             <div className="manual-input-wrap">
+              {clipboardBlocked && (
+                <p className="clipboard-limit" role="alert">
+                  目前瀏覽器不讓網頁直接讀取剪貼簿。這是瀏覽器限制；你可以在下方長按貼上，或改用手機 Chrome／Safari 開啟快導。
+                </p>
+              )}
               <label htmlFor="dispatch-input">手動貼上派單文字</label>
               <textarea
                 id="dispatch-input"
@@ -440,8 +443,18 @@ export default function Home() {
                 rows={4}
                 spellCheck={false}
               />
+              <button
+                className="manual-close-button"
+                type="button"
+                onClick={() => {
+                  setShowManualInput(false);
+                  setClipboardBlocked(false);
+                }}
+              >
+                收合手動輸入
+              </button>
             </div>
-          ) : (
+          ) : raw ? (
             <button
               className="manual-paste-button"
               type="button"
@@ -453,9 +466,9 @@ export default function Home() {
                 );
               }}
             >
-              {raw ? "查看或修改原始文字" : "無法自動貼上？改用手動貼上"}
+              查看或修改原始文字
             </button>
-          )}
+          ) : null}
           <p className="notice" role="status" aria-live="polite">
             {notice}
           </p>
@@ -509,7 +522,7 @@ export default function Home() {
             aria-describedby="destination-help"
           />
           <p id="destination-help" className="helper-text">
-            可以先手動修正；交接資料放在網址片段，不會送到網站伺服器。
+            可以先手動修正；Google Maps 只會收到你按下按鈕時確認的目的地。
           </p>
 
           {result.warnings.length > 0 && (
@@ -569,20 +582,6 @@ export default function Home() {
 
           {result.status !== "invalid" ? (
             <div className="result-actions">
-              {driverHandoff.ok ? (
-                <a className="driver-app-button" href={driverHandoff.appLinkUrl}>
-                  <span>開啟司機端開始跳錶</span>
-                  <span aria-hidden="true">→</span>
-                </a>
-              ) : (
-                <button
-                  className="driver-app-button disabled"
-                  disabled
-                  type="button"
-                >
-                  <span>{driverHandoff.message}</span>
-                </button>
-              )}
               <a
                 className="maps-button"
                 href={result.mapsUrl}
@@ -599,7 +598,7 @@ export default function Home() {
             </button>
           )}
           <p className="maps-disclosure">
-            未安裝司機端時會顯示說明頁；Google Maps 路線仍可照常使用。
+            按下後只顯示路線，由你在 Google Maps 內決定是否開始導航。
           </p>
           </section>
         )}
@@ -661,7 +660,6 @@ export default function Home() {
         <footer>
           <span>內容只在本機解析</span>
           <span>最近地址只保留在這台裝置</span>
-          <span>司機端交接片段不進入伺服器請求</span>
         </footer>
       </div>
     </main>

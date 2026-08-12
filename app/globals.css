@@ -305,6 +305,12 @@ select:focus-visible {
   transform: translateY(1px);
 }
 
+.quick-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
+}
+
 .quick-button-copy {
   position: absolute;
   overflow: hidden;
@@ -349,6 +355,30 @@ select:focus-visible {
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.clipboard-limit {
+  margin: 0 0 12px;
+  padding: 11px 12px;
+  border: 1px solid #f0d7a3;
+  border-radius: 11px;
+  background: var(--amber-bg);
+  color: #75430b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.manual-close-button {
+  display: block;
+  min-height: 40px;
+  margin: 9px 0 0 auto;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .manual-input-wrap {
