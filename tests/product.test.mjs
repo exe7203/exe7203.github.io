@@ -33,7 +33,10 @@ test("server-renders the production navigation assistant with an empty start sta
   assert.match(html, /<title>快導｜派單文字導航助手<\/title>/u);
   assert.match(html, /貼上派單/u);
   assert.match(html, /一鍵貼上解析/u);
-  assert.match(html, /複製派單文字後，按右下角「貼」/u);
+  assert.match(html, /複製派單文字後，按下方「貼」/u);
+  assert.match(html, /貼上按鈕位置/u);
+  assert.match(html, /左手/u);
+  assert.match(html, /右手/u);
   assert.match(html, /本機處理/u);
   assert.match(html, /按一次就讀取剛複製的派單文字/u);
   assert.match(html, /manifest\.webmanifest/u);
@@ -73,7 +76,14 @@ test("the interface uses the compact silver-black visual system", async () => {
   assert.match(styles, /--canvas: #090a0c/u);
   assert.match(styles, /color-scheme: dark/u);
   assert.match(styles, /linear-gradient\(145deg, #f5f6f7/u);
+  assert.match(styles, /\.quick-button\[data-side="left"\]/u);
+  assert.match(styles, /\.quick-button\[data-side="right"\]/u);
+  assert.match(styles, /env\(safe-area-inset-left\)/u);
+  assert.match(styles, /env\(safe-area-inset-right\)/u);
   assert.match(styles, /\.chips\.metadata span/u);
+  assert.match(pageSource, /quicknav-paste-side-v1|PASTE_SIDE_STORAGE_KEY/u);
+  assert.match(pageSource, /data-side=\{pasteSide\}/u);
+  assert.match(pageSource, /aria-pressed=\{pasteSide === "left"\}/u);
   assert.match(pageSource, /車隊資訊/u);
   assert.doesNotMatch(pageSource, /移除尾碼/u);
   assert.doesNotMatch(pageSource, /header-copy|quick-safety|<footer>/u);

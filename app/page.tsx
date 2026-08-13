@@ -22,6 +22,11 @@ import {
   trackAnalyticsEvent,
   type ParseSource,
 } from "./lib/analytics";
+import {
+  PASTE_SIDE_STORAGE_KEY,
+  readPasteSidePreference,
+  type PasteSide,
+} from "./lib/paste-side";
 import Link from "next/link";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -103,6 +108,7 @@ export default function Home() {
   const [showManualInput, setShowManualInput] = useState(false);
   const [clipboardBlocked, setClipboardBlocked] = useState(false);
   const [isReadingClipboard, setIsReadingClipboard] = useState(false);
+  const [pasteSide, setPasteSide] = useState<PasteSide>("right");
   const [addressHistory, setAddressHistory] = useState<AddressHistoryEntry[]>([]);
   const historyReadyRef = useRef(false);
   const resultCardRef = useRef<HTMLElement>(null);
@@ -171,6 +177,22 @@ export default function Home() {
       // Parsing and navigation still work when private browsing blocks storage.
     }
   }, [addressHistory]);
+
+  useEffect(() => {
+    const restorePasteSideTimer = window.setTimeout(() => {
+      try {
+        setPasteSide(
+          readPasteSidePreference(
+            window.localStorage.getItem(PASTE_SIDE_STORAGE_KEY),
+          ),
+        );
+      } catch {
+        // The right-side default remains available when storage is blocked.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(restorePasteSideTimer);
+  }, []);
 
   useEffect(() => {
     let restoreCityTimer: number | undefined;
@@ -274,6 +296,16 @@ export default function Home() {
     window.localStorage.setItem("quicknav-default-city", city);
     setResult(parseDispatch(raw, city));
     setNotice(city ? `預設城市已設為${city}` : "已關閉自動補城市");
+  }
+
+  function handlePasteSideChange(side: PasteSide) {
+    setPasteSide(side);
+    try {
+      window.localStorage.setItem(PASTE_SIDE_STORAGE_KEY, side);
+    } catch {
+      // The current selection still works when storage is blocked.
+    }
+    setNotice(`貼鍵已移到${side === "left" ? "左側" : "右側"}`);
   }
 
   async function readClipboardText(): Promise<string | null> {
@@ -434,6 +466,31 @@ export default function Home() {
             派單本機處理
           </span>
         </div>
+        <div className="handedness-row">
+          <div
+            className="handedness-control"
+            role="group"
+            aria-label="貼上按鈕位置"
+          >
+            <span className="handedness-label">貼鍵</span>
+            <button
+              className="handedness-option"
+              type="button"
+              aria-pressed={pasteSide === "left"}
+              onClick={() => handlePasteSideChange("left")}
+            >
+              左手
+            </button>
+            <button
+              className="handedness-option"
+              type="button"
+              aria-pressed={pasteSide === "right"}
+              onClick={() => handlePasteSideChange("right")}
+            >
+              右手
+            </button>
+          </div>
+        </div>
         {!isStandalone && installPrompt && (
           <div className="install-row">
             <button className="install-button" onClick={() => void installApp()}>
@@ -455,15 +512,16 @@ export default function Home() {
           </div>
 
           <div className="paste-guidance" id="paste-button-help">
-            <strong>複製派單文字後，按右下角「貼」</strong>
+            <strong>複製派單文字後，按下方「貼」</strong>
           </div>
 
           <button
             className="quick-button"
+            data-side={pasteSide}
             onClick={() => void handleQuickNavigate()}
             type="button"
             aria-describedby="paste-button-help"
-            title="貼上剪貼簿並解析地址"
+            title={`位於${pasteSide === "left" ? "左下角" : "右下角"}；貼上剪貼簿並解析地址`}
             disabled={isReadingClipboard}
           >
             <span className="quick-button-icon" aria-hidden="true">
@@ -491,7 +549,7 @@ export default function Home() {
                   setNotice(
                     event.target.value.trim()
                       ? "已解析輸入內容，請確認下方結果"
-                      : "請先複製派單文字，再按右下角的「貼」",
+                      : "請先複製派單文字，再按下方的「貼」",
                   );
                 }}
                 onPaste={handleManualPaste}
