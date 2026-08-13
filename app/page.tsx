@@ -459,12 +459,6 @@ export default function Home() {
           <div>
             <h1>快導</h1>
           </div>
-          <span
-            className="privacy-pill"
-            title="派單內容只在本機處理；使用量另以 GA4 統計"
-          >
-            派單本機處理
-          </span>
         </div>
         <div className="handedness-row">
           <div

@@ -158,18 +158,6 @@ select:focus-visible {
   left: 9px;
 }
 
-.privacy-pill {
-  margin-left: auto;
-  padding: 7px 10px;
-  border: 1px solid #3d4145;
-  border-radius: 999px;
-  color: var(--lime);
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
 .handedness-row {
   position: relative;
   z-index: 1;
@@ -919,11 +907,6 @@ select:focus-visible {
 }
 
 @media (max-width: 390px) {
-  .privacy-pill {
-    padding: 6px 8px;
-    font-size: 9px;
-  }
-
   .change-row {
     grid-template-columns: 1fr;
     gap: 3px;

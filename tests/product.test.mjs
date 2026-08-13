@@ -37,7 +37,9 @@ test("server-renders the production navigation assistant with an empty start sta
   assert.match(html, /貼上按鈕位置/u);
   assert.match(html, /左手/u);
   assert.match(html, /右手/u);
-  assert.match(html, /本機處理/u);
+  assert.match(html, /隱私與資料使用/u);
+  assert.match(html, /派單、地址與座標不會送出/u);
+  assert.doesNotMatch(html, /派單本機處理/u);
   assert.match(html, /按一次就讀取剛複製的派單文字/u);
   assert.match(html, /manifest\.webmanifest/u);
   assert.doesNotMatch(
