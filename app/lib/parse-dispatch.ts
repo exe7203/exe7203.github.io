@@ -1,5 +1,6 @@
 export type ParseStatus = "ready" | "review" | "invalid";
 export type QueryKind = "address" | "landmark" | "coordinates" | "unknown";
+export type MapsMode = "directions" | "search";
 
 export interface ParsedDispatch {
   raw: string;
@@ -11,6 +12,7 @@ export interface ParsedDispatch {
   note: string | null;
   additions: string[];
   warnings: string[];
+  mapsMode: MapsMode;
   mapsUrl: string;
 }
 
@@ -220,9 +222,35 @@ function findDmsCoordinates(input: string): {
   };
 }
 
+export function getMapsMode(query: string): MapsMode {
+  const normalized = query.replace(/\s+/gu, " ").trim();
+  const coordinates = findDmsCoordinates(normalized);
+  const isSingleCoordinate = Boolean(
+    coordinates &&
+      coordinates.valid &&
+      coordinates.count === 1 &&
+      coordinates.index === 0 &&
+      coordinates.length === normalized.length,
+  );
+  const cityCount = normalized.match(cityOrCountyAnywhere)?.length ?? 0;
+  const doorNumberCount = normalized.match(doorNumberAnywhere)?.length ?? 0;
+  const isSingleFullAddress =
+    fullQuickAddress.test(normalized) &&
+    cityCount === 1 &&
+    doorNumberCount === 1;
+
+  return isSingleCoordinate || isSingleFullAddress ? "directions" : "search";
+}
+
 export function buildMapsUrl(query: string): string {
-  const destination = encodeURIComponent(query.trim());
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+  const normalized = query.trim();
+  const encodedQuery = encodeURIComponent(normalized);
+
+  if (getMapsMode(normalized) === "directions") {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}&travelmode=driving`;
+  }
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
 export function canQuickNavigate(result: ParsedDispatch): boolean {
@@ -253,6 +281,7 @@ export function parseDispatch(
       note: null,
       additions,
       warnings: ["尚未貼上派單文字"],
+      mapsMode: "search",
       mapsUrl: buildMapsUrl(""),
     };
   }
@@ -327,7 +356,7 @@ export function parseDispatch(
       status = "review";
       if (!fullQuickAddress.test(query)) {
         warnings.push(
-          "地址缺少明確縣市、行政區或道路名稱，快速模式將先停下確認",
+          "地址缺少縣市或行政區，將改為搜尋相似地點",
         );
       }
     }
@@ -351,6 +380,7 @@ export function parseDispatch(
     note,
     additions,
     warnings,
+    mapsMode: getMapsMode(query),
     mapsUrl: buildMapsUrl(query),
   };
 }

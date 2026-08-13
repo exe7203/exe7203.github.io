@@ -43,7 +43,7 @@ if (!response.ok) {
 }
 
 const html = await response.text();
-if (!html.includes("一鍵貼上解析") || html.includes("第一版測試工具")) {
+if (!html.includes("貼上派單") || html.includes("第一版測試工具")) {
   throw new Error("Static render did not contain the validated production UI");
 }
 if (html.includes("localhost") || html.includes("127.0.0.1")) {

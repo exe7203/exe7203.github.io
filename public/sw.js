@@ -1,4 +1,4 @@
-const APP_CACHE = "quicknav-app-v3";
+const APP_CACHE = "quicknav-app-v4";
 const SHARE_CACHE = "quicknav-private-share-v2";
 const SHARE_MAX_AGE_MS = 5 * 60 * 1000;
 const APP_SHELL = [

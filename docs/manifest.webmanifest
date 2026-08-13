@@ -2,14 +2,14 @@
   "id": "/",
   "name": "快導｜派單文字導航助手",
   "short_name": "快導",
-  "description": "複製派單後按右下角貼上，整理地址、保留最近紀錄，再自行開啟 Google Maps 路線。",
+  "description": "貼上派單並清理代碼；地址不完整時先查看相似地點。",
   "lang": "zh-Hant",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#eef1eb",
-  "theme_color": "#10291e",
+  "background_color": "#090a0c",
+  "theme_color": "#090a0c",
   "categories": ["navigation", "utilities", "productivity"],
   "icons": [
     {

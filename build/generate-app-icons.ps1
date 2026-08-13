@@ -9,12 +9,12 @@ function New-QuickNavIcon {
     $bitmap = New-Object System.Drawing.Bitmap($Size, $Size)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#10291e'))
+    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#171819'))
 
-    $ringPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(28, 223, 255, 98), ($Size * 0.012))
+    $ringPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(42, 209, 213, 217), ($Size * 0.012))
     $graphics.DrawEllipse($ringPen, ($Size * 0.09), ($Size * 0.09), ($Size * 0.82), ($Size * 0.82))
 
-    $routePen = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml('#dfff62'), ($Size * 0.075))
+    $routePen = New-Object System.Drawing.Pen([System.Drawing.ColorTranslator]::FromHtml('#d1d5d9'), ($Size * 0.075))
     $routePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
     $routePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
     $graphics.DrawBezier(
@@ -25,13 +25,13 @@ function New-QuickNavIcon {
         [System.Drawing.PointF]::new(($Size * 0.72), ($Size * 0.27))
     )
 
-    $darkBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#10291e'))
-    $limeBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#dfff62'))
-    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#ffffff'))
+    $darkBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#171819'))
+    $silverBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#d1d5d9'))
+    $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#f4f5f6'))
 
     $small = $Size * 0.105
     $large = $Size * 0.17
-    $graphics.FillEllipse($limeBrush, ($Size * 0.20), ($Size * 0.66), $small, $small)
+    $graphics.FillEllipse($silverBrush, ($Size * 0.20), ($Size * 0.66), $small, $small)
     $graphics.FillEllipse($darkBrush, ($Size * 0.225), ($Size * 0.685), ($small * 0.52), ($small * 0.52))
     $graphics.FillEllipse($whiteBrush, ($Size * 0.635), ($Size * 0.185), $large, $large)
     $graphics.FillEllipse($darkBrush, ($Size * 0.688), ($Size * 0.238), ($large * 0.38), ($large * 0.38))
@@ -40,7 +40,7 @@ function New-QuickNavIcon {
     $ringPen.Dispose()
     $routePen.Dispose()
     $darkBrush.Dispose()
-    $limeBrush.Dispose()
+    $silverBrush.Dispose()
     $whiteBrush.Dispose()
     $graphics.Dispose()
     $bitmap.Dispose()

@@ -18,6 +18,8 @@ test("parses a complete address with multiple prefix parameters", () => {
   assert.deepEqual(result.prefixes, ["*55/", "私/", "17.20/"]);
   assert.deepEqual(result.suffixes, ["💣回20"]);
   assert.deepEqual(result.warnings, []);
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(new URL(result.mapsUrl).pathname, "/maps/dir/");
   assert.equal(canQuickNavigate(result), true);
 });
 
@@ -34,6 +36,7 @@ test("keeps a note, warns about an open parenthesis, and visibly adds the defaul
   assert.deepEqual(result.prefixes, ["*BB/"]);
   assert.deepEqual(result.suffixes, ["💣回20"]);
   assert.match(result.warnings.join(" "), /括號未閉合/u);
+  assert.equal(result.mapsMode, "directions");
   assert.equal(canQuickNavigate(result), false);
 });
 
@@ -47,6 +50,7 @@ test("preserves landmark direction text without inventing a street name", () => 
   assert.equal(result.kind, "landmark");
   assert.equal(result.status, "review");
   assert.match(result.warnings.join(" "), /地標／方位描述/u);
+  assert.equal(result.mapsMode, "search");
   assert.equal(canQuickNavigate(result), false);
 });
 
@@ -57,7 +61,8 @@ test("keeps two-character landmark shorthand available for manual map search", (
   assert.equal(result.status, "review");
   assert.equal(result.kind, "unknown");
   assert.equal(canQuickNavigate(result), false);
-  assert.match(result.mapsUrl, /destination=%E5%B7%A8%E5%85%AD/u);
+  assert.equal(result.mapsMode, "search");
+  assert.match(result.mapsUrl, /query=%E5%B7%A8%E5%85%AD/u);
 });
 
 test("does not add a city unless the setting is enabled", () => {
@@ -72,7 +77,23 @@ test("does not quick-navigate a door number without city and district context", 
   assert.equal(result.kind, "address");
   assert.equal(result.status, "review");
   assert.equal(canQuickNavigate(result), false);
-  assert.match(result.warnings.join(" "), /缺少明確縣市/u);
+  assert.match(result.warnings.join(" "), /缺少縣市或行政區/u);
+});
+
+test("searches ambiguous dispatch addresses without letting directions choose a city", () => {
+  const result = parseDispatch("*16/民權街1號💣回20", "台中市");
+  const url = new URL(result.mapsUrl);
+
+  assert.equal(result.query, "民權街1號");
+  assert.deepEqual(result.prefixes, ["*16/"]);
+  assert.deepEqual(result.suffixes, ["💣回20"]);
+  assert.equal(result.kind, "address");
+  assert.equal(result.status, "review");
+  assert.equal(result.mapsMode, "search");
+  assert.equal(url.pathname, "/maps/search/");
+  assert.equal(url.searchParams.get("query"), "民權街1號");
+  assert.equal(url.searchParams.has("destination"), false);
+  assert.equal(url.searchParams.has("travelmode"), false);
 });
 
 test("does not quick-navigate an address with no road or locality name", () => {
@@ -338,6 +359,8 @@ test("navigates a valid DMS coordinate pair and removes known metadata", () => {
   assert.equal(result.query, "24°10'17.6\"N 120°39'07.3\"E");
   assert.equal(result.kind, "coordinates");
   assert.equal(result.status, "ready");
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(new URL(result.mapsUrl).pathname, "/maps/dir/");
   assert.deepEqual(result.prefixes, ["*8926/"]);
   assert.deepEqual(result.suffixes, ["🐟回20"]);
   assert.equal(canQuickNavigate(result), true);
@@ -379,13 +402,22 @@ test("does not prepend Taichung to a different named city", () => {
   assert.deepEqual(result.additions, []);
 });
 
-test("builds an encoded Google Maps URL without an API key", () => {
-  const url = buildMapsUrl("台中火車站大智北");
-  assert.match(url, /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&/u);
-  assert.match(url, /destination=%E5%8F%B0%E4%B8%AD/u);
-  assert.match(url, /travelmode=driving/u);
-  assert.doesNotMatch(url, /dir_action=navigate/u);
-  assert.doesNotMatch(url, /key=/u);
+test("builds Google Maps search for ambiguous text and directions for a full address", () => {
+  const searchUrl = new URL(buildMapsUrl("台中火車站大智北"));
+  assert.equal(searchUrl.pathname, "/maps/search/");
+  assert.equal(searchUrl.searchParams.get("query"), "台中火車站大智北");
+  assert.equal(searchUrl.searchParams.has("destination"), false);
+  assert.equal(searchUrl.searchParams.has("key"), false);
+
+  const directionsUrl = new URL(buildMapsUrl("台中市北區興進路205號"));
+  assert.equal(directionsUrl.pathname, "/maps/dir/");
+  assert.equal(
+    directionsUrl.searchParams.get("destination"),
+    "台中市北區興進路205號",
+  );
+  assert.equal(directionsUrl.searchParams.get("travelmode"), "driving");
+  assert.equal(directionsUrl.searchParams.has("dir_action"), false);
+  assert.equal(directionsUrl.searchParams.has("key"), false);
 });
 
 test("never quick-navigates text containing two possible addresses", () => {

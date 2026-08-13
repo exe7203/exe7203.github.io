@@ -1,19 +1,19 @@
 :root {
-  --ink: #10231a;
-  --ink-soft: #4c5d54;
-  --forest: #10291e;
-  --forest-light: #173a2a;
-  --lime: #dfff62;
-  --lime-soft: #f3ffc8;
-  --paper: #ffffff;
-  --canvas: #eef1eb;
-  --line: #d9dfd8;
-  --amber: #a55a00;
-  --amber-bg: #fff5df;
-  --red: #9d2a20;
-  --red-bg: #fff0ed;
-  --shadow: 0 18px 45px rgba(16, 41, 30, 0.09);
-  color-scheme: light;
+  --ink: #f2f4f5;
+  --ink-soft: #adb3b8;
+  --forest: #090a0b;
+  --forest-light: #191b1e;
+  --lime: #d1d5d9;
+  --lime-soft: #292c30;
+  --paper: #151719;
+  --canvas: #090a0c;
+  --line: #34383d;
+  --amber: #efc36e;
+  --amber-bg: #2a241a;
+  --red: #ff9c94;
+  --red-bg: #2b1918;
+  --shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
 }
 
 * {
@@ -30,7 +30,7 @@ body {
   min-height: 100%;
   margin: 0;
   background:
-    radial-gradient(circle at 90% -10%, rgba(223, 255, 98, 0.2), transparent 25rem),
+    radial-gradient(circle at 82% -8%, rgba(213, 218, 223, 0.1), transparent 24rem),
     var(--canvas);
   color: var(--ink);
   font-family:
@@ -55,7 +55,7 @@ button:focus-visible,
 a:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid rgba(28, 115, 74, 0.33);
+  outline: 3px solid rgba(210, 215, 220, 0.42);
   outline-offset: 3px;
 }
 
@@ -66,22 +66,19 @@ select:focus-visible {
 .app-header {
   position: relative;
   overflow: hidden;
-  padding: max(22px, env(safe-area-inset-top)) 20px 34px;
-  border-radius: 0 0 30px 30px;
-  background:
-    radial-gradient(circle at 88% 15%, rgba(223, 255, 98, 0.17), transparent 11rem),
-    var(--forest);
+  padding: max(16px, env(safe-area-inset-top)) 20px 18px;
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(115deg, #050607 0%, #121417 62%, #08090a 100%);
   color: #fff;
 }
 
 .app-header::after {
   position: absolute;
-  right: -45px;
-  bottom: -70px;
-  width: 180px;
-  height: 180px;
-  border: 1px solid rgba(223, 255, 98, 0.22);
-  border-radius: 50%;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #aeb4b9 48%, transparent);
   content: "";
 }
 
@@ -108,14 +105,6 @@ select:focus-visible {
   letter-spacing: 0.04em;
 }
 
-.eyebrow {
-  margin-bottom: 5px !important;
-  color: #bfd2c7;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-}
-
 .brand-mark {
   position: relative;
   display: grid;
@@ -123,9 +112,9 @@ select:focus-visible {
   width: 48px;
   height: 48px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 15px;
-  background: var(--forest-light);
+  border: 1px solid #3e4246;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #24272a, #101113);
 }
 
 .brand-mark::before {
@@ -145,7 +134,7 @@ select:focus-visible {
   z-index: 1;
   width: 9px;
   height: 9px;
-  border: 2px solid var(--forest);
+  border: 2px solid #0b0c0d;
   border-radius: 50%;
   background: var(--lime);
 }
@@ -168,7 +157,7 @@ select:focus-visible {
 .privacy-pill {
   margin-left: auto;
   padding: 7px 10px;
-  border: 1px solid rgba(223, 255, 98, 0.25);
+  border: 1px solid #3d4145;
   border-radius: 999px;
   color: var(--lime);
   font-size: 11px;
@@ -177,25 +166,14 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.header-copy {
-  position: relative;
-  z-index: 1;
-  max-width: 720px;
-  margin: 25px auto 0;
-  color: #dae6df;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
 .install-row {
   position: relative;
   z-index: 1;
   max-width: 720px;
-  margin: 17px auto 0;
+  margin: 12px auto 0;
 }
 
-.install-button,
-.install-state {
+.install-button {
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -203,7 +181,7 @@ select:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.07);
-  color: #dce8e1;
+  color: #e2e5e7;
   font-size: 12px;
 }
 
@@ -220,8 +198,8 @@ select:focus-visible {
 }
 
 .card {
-  border: 1px solid rgba(16, 35, 26, 0.08);
-  border-radius: 22px;
+  border: 1px solid #2d3034;
+  border-radius: 16px;
   background: var(--paper);
   box-shadow: var(--shadow);
 }
@@ -256,21 +234,15 @@ select:focus-visible {
 
 .paste-guidance {
   display: grid;
-  padding: 13px 14px;
+  padding: 12px 14px;
   border-left: 3px solid var(--lime);
   border-radius: 0 12px 12px 0;
-  background: #f5f7f2;
+  background: #1d2023;
   gap: 3px;
 }
 
 .paste-guidance strong {
   font-size: 14px;
-}
-
-.paste-guidance span {
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .quick-button {
@@ -284,24 +256,25 @@ select:focus-visible {
   min-height: 58px;
   place-items: center;
   padding: 0;
-  border: 1px solid #c4e846;
+  border: 1px solid #f1f3f4;
   border-radius: 19px;
-  background: var(--lime);
+  background: linear-gradient(145deg, #f5f6f7 0%, #b4bac0 52%, #e2e5e7 100%);
   box-shadow:
-    0 12px 28px rgba(16, 41, 30, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+    0 12px 28px rgba(0, 0, 0, 0.48),
+    0 0 18px rgba(211, 216, 221, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
   color: var(--forest);
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 .quick-button:hover {
-  box-shadow: 0 13px 30px rgba(140, 173, 35, 0.28);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.56);
   transform: translateY(-1px);
 }
 
 .quick-button:active {
-  box-shadow: 0 6px 14px rgba(140, 173, 35, 0.2);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.46);
   transform: translateY(1px);
 }
 
@@ -336,20 +309,13 @@ select:focus-visible {
   letter-spacing: 0.08em;
 }
 
-.quick-safety {
-  margin: 8px 2px 0;
-  color: #617168;
-  font-size: 11px;
-  line-height: 1.55;
-}
-
 .manual-paste-button {
   display: block;
   margin: 14px auto 0;
   padding: 7px 10px;
   border: 0;
   background: transparent;
-  color: #66776d;
+  color: var(--ink-soft);
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
@@ -360,10 +326,10 @@ select:focus-visible {
 .clipboard-limit {
   margin: 0 0 12px;
   padding: 11px 12px;
-  border: 1px solid #f0d7a3;
+  border: 1px solid #725e38;
   border-radius: 11px;
   background: var(--amber-bg);
-  color: #75430b;
+  color: #f2d18f;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -384,7 +350,7 @@ select:focus-visible {
 .manual-input-wrap {
   margin-top: 15px;
   padding-top: 14px;
-  border-top: 1px solid #e1e6e0;
+  border-top: 1px solid var(--line);
 }
 
 .manual-input-wrap > label {
@@ -402,7 +368,7 @@ select:focus-visible {
   resize: vertical;
   border: 1.5px solid var(--line);
   border-radius: 14px;
-  background: #fbfcfa;
+  background: #101214;
   color: var(--ink);
   font-size: 16px;
   line-height: 1.65;
@@ -414,13 +380,13 @@ select:focus-visible {
 }
 
 #dispatch-input::placeholder {
-  color: #849087;
+  color: #737a80;
 }
 
 #dispatch-input:focus,
 .destination-input:focus {
-  border-color: #6f8a79;
-  background: #fff;
+  border-color: #858c92;
+  background: #111315;
 }
 
 .maps-button,
@@ -434,14 +400,14 @@ select:focus-visible {
 .notice {
   min-height: 20px;
   margin: 9px 2px 0;
-  color: #607168;
+  color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .settings-panel {
   margin-top: 12px;
-  border-top: 1px solid #e6eae5;
+  border-top: 1px solid var(--line);
 }
 
 .settings-panel summary {
@@ -459,7 +425,7 @@ select:focus-visible {
   margin-top: 10px;
   padding: 12px 13px;
   border-radius: 12px;
-  background: #f3f5f1;
+  background: #1c1f22;
   gap: 12px;
 }
 
@@ -472,11 +438,18 @@ select:focus-visible {
 .setting-row select {
   max-width: 55%;
   padding: 7px 30px 7px 10px;
-  border: 1px solid #ced6cf;
+  border: 1px solid #44494e;
   border-radius: 9px;
-  background: #fff;
+  background: #111315;
   color: var(--ink);
   font-size: 13px;
+}
+
+.install-help {
+  margin: 10px 2px 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .result-card {
@@ -507,8 +480,8 @@ select:focus-visible {
 }
 
 .status-badge.ready {
-  background: #eaf8ed;
-  color: #146833;
+  background: #183022;
+  color: #9ddbb0;
 }
 
 .status-badge.review {
@@ -532,28 +505,20 @@ select:focus-visible {
 .destination-input {
   min-height: 89px;
   padding: 15px;
-  border-color: #a9b8ae;
-  background: #fff;
+  border-color: #555b60;
+  background: #101214;
   font-size: 19px;
   font-weight: 780;
   letter-spacing: 0.01em;
 }
 
-.helper-text,
-.maps-disclosure {
-  margin: 8px 2px 0;
-  color: #718078;
-  font-size: 11px;
-  line-height: 1.55;
-}
-
 .warning-panel {
   margin-top: 17px;
   padding: 13px 14px;
-  border: 1px solid #f0d7a3;
+  border: 1px solid #725e38;
   border-radius: 13px;
   background: var(--amber-bg);
-  color: #75430b;
+  color: #f2d18f;
 }
 
 .warning-panel strong {
@@ -575,7 +540,7 @@ select:focus-visible {
   margin-top: 18px;
   padding: 15px;
   border-radius: 14px;
-  background: #f5f7f4;
+  background: #1d2023;
 }
 
 .changes-panel h3 {
@@ -592,12 +557,12 @@ select:focus-visible {
 }
 
 .change-row + .change-row {
-  border-top: 1px solid #e1e6e0;
+  border-top: 1px solid var(--line);
 }
 
 .change-label {
   padding-top: 4px;
-  color: #6a786f;
+  color: #92999f;
   font-size: 11px;
   font-weight: 700;
 }
@@ -620,19 +585,19 @@ select:focus-visible {
 }
 
 .chips.removed span {
-  background: #ebecea;
-  color: #6c726e;
+  background: #2b2e31;
+  color: #aeb3b7;
   text-decoration: line-through;
 }
 
 .chips.additions span {
   background: var(--lime-soft);
-  color: #436000;
+  color: #e2e5e7;
 }
 
 .chips.notes span {
-  background: #e7f2ff;
-  color: #215984;
+  background: #1d2b38;
+  color: #afd0ea;
 }
 
 .result-actions {
@@ -666,8 +631,9 @@ select:focus-visible {
 }
 
 .maps-button {
-  background: #fff;
-  color: var(--forest);
+  border-color: #d4d8dc;
+  background: linear-gradient(180deg, #eff1f2, #bdc3c8);
+  color: #0a0b0c;
 }
 
 .driver-app-button span:last-child,
@@ -689,10 +655,6 @@ select:focus-visible {
   background: #e8ebe8;
   color: #7d8982;
   cursor: not-allowed;
-}
-
-.maps-disclosure {
-  text-align: center;
 }
 
 .history-card {
@@ -729,7 +691,7 @@ select:focus-visible {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fbfcfa;
+  background: #111315;
 }
 
 .history-address {
@@ -755,7 +717,7 @@ select:focus-visible {
 }
 
 .history-address small {
-  color: #718078;
+  color: #8f969c;
   font-size: 10px;
 }
 
@@ -772,7 +734,7 @@ select:focus-visible {
   min-height: 48px;
   place-items: center;
   border: 0;
-  background: #fff;
+  background: #17191b;
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
@@ -780,40 +742,19 @@ select:focus-visible {
 }
 
 .history-map-button {
-  color: var(--forest);
+  color: #d8dcdf;
 }
 
 .history-delete-button {
   border-left: 1px solid var(--line);
-  color: #7b423d;
+  color: #d88982;
   font-size: 20px;
 }
 
 .history-map-button:active,
 .history-delete-button:active,
 .history-address:active {
-  background: #eef2ec;
-}
-
-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding: 6px 0 10px;
-  color: #68776f;
-  font-size: 10px;
-  gap: 8px 15px;
-}
-
-footer span {
-  position: relative;
-}
-
-footer span + span::before {
-  position: absolute;
-  left: -9px;
-  color: #a9b2ac;
-  content: "•";
+  background: #25282b;
 }
 
 @media (min-width: 680px) {
@@ -833,15 +774,6 @@ footer span + span::before {
     padding: 25px;
   }
 
-  .header-copy {
-    font-size: 16px;
-  }
-}
-
-@media (max-width: 520px) {
-  .history-list {
-    margin-right: 58px;
-  }
 }
 
 @media (max-width: 390px) {

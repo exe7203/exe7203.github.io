@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildMapsUrl,
   canQuickNavigate,
+  getMapsMode,
   parseDispatch,
   type ParsedDispatch,
 } from "./lib/parse-dispatch";
@@ -72,7 +73,7 @@ export default function Home() {
   const [defaultCity, setDefaultCity] = useState("台中市");
   const [raw, setRaw] = useState("");
   const [result, setResult] = useState(() => parseDispatch("", "台中市"));
-  const [notice, setNotice] = useState("請先複製派單文字，再按右下角的「貼」");
+  const [notice, setNotice] = useState("");
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -344,6 +345,7 @@ export default function Home() {
     setResult((current) => ({
       ...current,
       query: value,
+      mapsMode: getMapsMode(value),
       mapsUrl: buildMapsUrl(value),
       status: value.trim().length >= 2 ? "review" : "invalid",
     }));
@@ -359,25 +361,15 @@ export default function Home() {
             <span />
           </div>
           <div>
-            <p className="eyebrow">文字導航助手</p>
             <h1>快導</h1>
           </div>
-          <span className="privacy-pill">本機解析</span>
+          <span className="privacy-pill">本機處理</span>
         </div>
-        <p className="header-copy">
-          複製派單後點一下，系統會清理代碼並顯示路線；確認後再開始導航。
-        </p>
-        {!isStandalone && (
+        {!isStandalone && installPrompt && (
           <div className="install-row">
-          {installPrompt ? (
             <button className="install-button" onClick={() => void installApp()}>
               ＋ 安裝快導
             </button>
-          ) : isIos ? (
-            <span className="install-state">iPhone 可由分享選單加入主畫面</span>
-          ) : (
-            <span className="install-state">可由瀏覽器選單加入主畫面</span>
-          )}
           </div>
         )}
       </header>
@@ -385,7 +377,7 @@ export default function Home() {
       <div className="content-stack">
         <section className="card input-card" aria-labelledby="input-title">
           <div className="section-heading">
-            <h2 id="input-title">查看路線</h2>
+            <h2 id="input-title">貼上派單</h2>
             {raw && (
               <button className="text-button" onClick={clearAll} type="button">
                 清除目前內容
@@ -394,8 +386,7 @@ export default function Home() {
           </div>
 
           <div className="paste-guidance" id="paste-button-help">
-            <strong>按一次，直接貼上並解析</strong>
-            <span>先複製派單文字，再按右下角的「貼」；不會自動開導航。</span>
+            <strong>複製派單文字後，按右下角「貼」</strong>
           </div>
 
           <button
@@ -414,10 +405,6 @@ export default function Home() {
               <small>按一次就讀取剛複製的派單文字</small>
             </span>
           </button>
-          <p className="quick-safety">
-            補城市、括號異常或地標描述會先停下，避免導錯地點。
-          </p>
-
           {showManualInput ? (
             <div className="manual-input-wrap">
               {clipboardBlocked && (
@@ -469,12 +456,14 @@ export default function Home() {
               查看或修改原始文字
             </button>
           ) : null}
-          <p className="notice" role="status" aria-live="polite">
-            {notice}
-          </p>
+          {notice && (
+            <p className="notice" role="status" aria-live="polite">
+              {notice}
+            </p>
+          )}
 
           <details className="settings-panel">
-            <summary>導航設定</summary>
+            <summary>設定</summary>
             <div className="setting-row">
               <label htmlFor="default-city">地址缺少縣市時</label>
               <select
@@ -486,6 +475,13 @@ export default function Home() {
                 <option value="">不要自動補上</option>
               </select>
             </div>
+            {!isStandalone && !installPrompt && (
+              <p className="install-help">
+                {isIos
+                  ? "iPhone 可由分享選單加入主畫面"
+                  : "可由瀏覽器選單加入主畫面"}
+              </p>
+            )}
           </details>
         </section>
 
@@ -500,8 +496,8 @@ export default function Home() {
             <h2 id="result-title">
               {result.kind === "coordinates"
                 ? "要導航的座標"
-                : result.kind === "landmark"
-                  ? "要搜尋的地標"
+                : result.mapsMode === "search"
+                  ? "要搜尋的地點"
                   : "要導航的地址"}
             </h2>
             <div className={`status-badge ${statusCopy.tone}`}>
@@ -519,15 +515,11 @@ export default function Home() {
             value={result.query}
             onChange={(event) => editDestination(event.target.value)}
             rows={2}
-            aria-describedby="destination-help"
           />
-          <p id="destination-help" className="helper-text">
-            可以先手動修正；Google Maps 只會收到你按下按鈕時確認的目的地。
-          </p>
 
           {result.warnings.length > 0 && (
             <div className="warning-panel" role="alert">
-              <strong>導航前請確認</strong>
+              <strong>請確認地點</strong>
               <ul>
                 {result.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
@@ -588,7 +580,9 @@ export default function Home() {
                 target="_blank"
                 rel="noreferrer"
               >
-                <span>只在 Google Maps 顯示路線</span>
+                <span>
+                  {result.mapsMode === "search" ? "查看相似地點" : "查看路線"}
+                </span>
                 <span aria-hidden="true">↗</span>
               </a>
             </div>
@@ -597,9 +591,6 @@ export default function Home() {
               請先輸入可導航文字
             </button>
           )}
-          <p className="maps-disclosure">
-            按下後只顯示路線，由你在 Google Maps 內決定是否開始導航。
-          </p>
           </section>
         )}
 
@@ -610,8 +601,8 @@ export default function Home() {
           >
             <div className="section-heading history-heading">
               <div>
-                <h2 id="history-title">最近貼上的地址</h2>
-                <p>共 {addressHistory.length} 筆，只保留在這台裝置</p>
+                <h2 id="history-title">最近地址</h2>
+                <p>{addressHistory.length} 筆 · 本機保存</p>
               </div>
               <button
                 className="text-button"
@@ -638,7 +629,7 @@ export default function Home() {
                       href={buildMapsUrl(entry.address)}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label={`在 Google Maps 顯示 ${entry.address} 的路線`}
+                      aria-label={`在 Google Maps 查看 ${entry.address}`}
                     >
                       地圖
                     </a>
@@ -657,10 +648,6 @@ export default function Home() {
           </section>
         )}
 
-        <footer>
-          <span>內容只在本機解析</span>
-          <span>最近地址只保留在這台裝置</span>
-        </footer>
       </div>
     </main>
   );

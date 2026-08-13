@@ -4,7 +4,7 @@ import "./globals.css";
 
 const title = "快導｜派單文字導航助手";
 const description =
-  "複製派單後按右下角貼上：整理地址、保留最近紀錄，再自行開啟 Google Maps 路線。";
+  "貼上派單、清理代碼；地址不完整時先查看相似地點，再自行開啟 Google Maps。";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -60,9 +60,9 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: socialImage,
-          width: 1731,
-          height: 909,
-          alt: "快導：貼上派單後整理地址並確認路線",
+          width: 1729,
+          height: 910,
+          alt: "快導：貼上派單，確認地點",
         },
       ],
     },
@@ -79,7 +79,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#10291e",
+  themeColor: "#090a0c",
 };
 
 export default function RootLayout({
