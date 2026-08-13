@@ -17,6 +17,12 @@ import {
   removeAddressHistoryEntry,
   serializeAddressHistory,
 } from "./lib/address-history";
+import {
+  getLaunchMode,
+  trackAnalyticsEvent,
+  type ParseSource,
+} from "./lib/analytics";
+import Link from "next/link";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -67,6 +73,22 @@ function getStatusCopy(result: ParsedDispatch) {
     return { label: "無法導航", detail: "請補上地址", tone: "invalid" };
   }
   return { label: "需要確認", detail: "請核對地圖結果", tone: "review" };
+}
+
+function trackParsedDispatch(source: ParseSource, result: ParsedDispatch) {
+  trackAnalyticsEvent({
+    name: "dispatch_parse_result",
+    params: {
+      parse_source: source,
+      parse_status: result.status,
+      query_kind: result.kind,
+      maps_mode: result.mapsMode,
+    },
+  });
+}
+
+function openMapsUrl(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export default function Home() {
@@ -170,8 +192,25 @@ export default function Home() {
     const installHandler = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
+      trackAnalyticsEvent({
+        name: "pwa_install_flow",
+        params: {
+          install_stage: "prompt_available",
+          launch_mode: getLaunchMode(),
+        },
+      });
+    };
+    const installedHandler = () => {
+      trackAnalyticsEvent({
+        name: "pwa_install_flow",
+        params: {
+          install_stage: "appinstalled_signal",
+          launch_mode: getLaunchMode(),
+        },
+      });
     };
     window.addEventListener("beforeinstallprompt", installHandler);
+    window.addEventListener("appinstalled", installedHandler);
 
     async function preparePwa() {
       if (!("serviceWorker" in navigator)) return;
@@ -194,6 +233,7 @@ export default function Home() {
               setRaw(payload.text);
               setResult(sharedResult);
               rememberAddress(sharedResult);
+              trackParsedDispatch("share_target", sharedResult);
               if (canQuickNavigate(sharedResult)) {
                 setNotice("地址完整，請確認後開啟 Google Maps");
               } else {
@@ -218,6 +258,7 @@ export default function Home() {
         window.clearTimeout(environmentTimer);
       }
       window.removeEventListener("beforeinstallprompt", installHandler);
+      window.removeEventListener("appinstalled", installedHandler);
     };
   }, [defaultCity, rememberAddress, revealResult]);
 
@@ -269,6 +310,10 @@ export default function Home() {
 
   async function handleQuickNavigate() {
     if (isReadingClipboard) return;
+    trackAnalyticsEvent({
+      name: "dispatch_paste_click",
+      params: { launch_mode: getLaunchMode() },
+    });
     setIsReadingClipboard(true);
     try {
       const text = await readClipboardText();
@@ -276,6 +321,7 @@ export default function Home() {
 
       const parsed = parseText(text);
       rememberAddress(parsed);
+      trackParsedDispatch("clipboard", parsed);
       setShowManualInput(false);
       if (canQuickNavigate(parsed)) {
         setNotice("已一鍵貼上並解析完成，請確認後開啟 Google Maps");
@@ -294,6 +340,7 @@ export default function Home() {
     event.preventDefault();
     const parsed = parseText(text);
     rememberAddress(parsed);
+    trackParsedDispatch("manual_paste", parsed);
     setNotice(
       canQuickNavigate(parsed)
         ? "已貼上並完成解析，請確認後開啟 Google Maps"
@@ -332,8 +379,25 @@ export default function Home() {
 
   async function installApp() {
     if (!installPrompt) return;
+    trackAnalyticsEvent({
+      name: "pwa_install_flow",
+      params: {
+        install_stage: "button_click",
+        launch_mode: getLaunchMode(),
+      },
+    });
     await installPrompt.prompt();
     const choice = await installPrompt.userChoice;
+    trackAnalyticsEvent({
+      name: "pwa_install_flow",
+      params: {
+        install_stage:
+          choice.outcome === "accepted"
+            ? "prompt_accepted"
+            : "prompt_dismissed",
+        launch_mode: getLaunchMode(),
+      },
+    });
     if (choice.outcome === "accepted") {
       setNotice("已開始安裝到主畫面");
       setIsStandalone(true);
@@ -363,7 +427,12 @@ export default function Home() {
           <div>
             <h1>快導</h1>
           </div>
-          <span className="privacy-pill">本機處理</span>
+          <span
+            className="privacy-pill"
+            title="派單內容只在本機處理；使用量另以 GA4 統計"
+          >
+            派單本機處理
+          </span>
         </div>
         {!isStandalone && installPrompt && (
           <div className="install-row">
@@ -482,6 +551,9 @@ export default function Home() {
                   : "可由瀏覽器選單加入主畫面"}
               </p>
             )}
+            <p className="install-help">
+              僅統計使用事件；派單、地址與座標不會送出
+            </p>
           </details>
         </section>
 
@@ -543,7 +615,7 @@ export default function Home() {
               )}
               {result.note && (
                 <div className="change-row">
-                  <span className="change-label">保留備註</span>
+                  <span className="change-label">行程備註</span>
                   <div className="chips notes">
                     <span>{result.note}</span>
                   </div>
@@ -561,8 +633,8 @@ export default function Home() {
               )}
               {result.suffixes.length > 0 && (
                 <div className="change-row">
-                  <span className="change-label">移除尾碼</span>
-                  <div className="chips removed">
+                  <span className="change-label">車隊資訊</span>
+                  <div className="chips metadata">
                     {result.suffixes.map((suffix) => (
                       <span key={suffix}>{suffix}</span>
                     ))}
@@ -574,17 +646,28 @@ export default function Home() {
 
           {result.status !== "invalid" ? (
             <div className="result-actions">
-              <a
+              <button
                 className="maps-button"
-                href={result.mapsUrl}
-                target="_blank"
-                rel="noreferrer"
+                type="button"
+                onClick={() => {
+                  trackAnalyticsEvent({
+                    name: "maps_open_click",
+                    params: {
+                      entry_point: "current_result",
+                      launch_mode: getLaunchMode(),
+                      maps_mode: result.mapsMode,
+                      parse_status: result.status,
+                      query_kind: result.kind,
+                    },
+                  });
+                  openMapsUrl(result.mapsUrl);
+                }}
               >
                 <span>
                   {result.mapsMode === "search" ? "查看相似地點" : "查看路線"}
                 </span>
                 <span aria-hidden="true">↗</span>
-              </a>
+              </button>
             </div>
           ) : (
             <button className="maps-button disabled" disabled type="button">
@@ -624,15 +707,26 @@ export default function Home() {
                     <small>{formatHistoryTime(entry.savedAt)} · 點一下帶回確認</small>
                   </button>
                   <div className="history-actions">
-                    <a
+                    <button
                       className="history-map-button"
-                      href={buildMapsUrl(entry.address)}
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
+                      onClick={() => {
+                        trackAnalyticsEvent({
+                          name: "maps_open_click",
+                          params: {
+                            entry_point: "history",
+                            launch_mode: getLaunchMode(),
+                            maps_mode: getMapsMode(entry.address),
+                            parse_status: "history",
+                            query_kind: "history",
+                          },
+                        });
+                        openMapsUrl(buildMapsUrl(entry.address));
+                      }}
                       aria-label={`在 Google Maps 查看 ${entry.address}`}
                     >
                       地圖
-                    </a>
+                    </button>
                     <button
                       className="history-delete-button"
                       type="button"
@@ -648,6 +742,9 @@ export default function Home() {
           </section>
         )}
 
+        <footer className="site-footer">
+          <Link href="/privacy/">隱私與資料使用</Link>
+        </footer>
       </div>
     </main>
   );

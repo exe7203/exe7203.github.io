@@ -73,7 +73,81 @@ test("the interface uses the compact silver-black visual system", async () => {
   assert.match(styles, /--canvas: #090a0c/u);
   assert.match(styles, /color-scheme: dark/u);
   assert.match(styles, /linear-gradient\(145deg, #f5f6f7/u);
+  assert.match(styles, /\.chips\.metadata span/u);
+  assert.match(pageSource, /車隊資訊/u);
+  assert.doesNotMatch(pageSource, /移除尾碼/u);
   assert.doesNotMatch(pageSource, /header-copy|quick-safety|<footer>/u);
+});
+
+test("GA4 measures formal-site usage without collecting dispatch content", async () => {
+  const analyticsSource = await readFile(
+    new URL("../app/lib/analytics.ts", import.meta.url),
+    "utf8",
+  );
+  const componentSource = await readFile(
+    new URL("../app/google-analytics.tsx", import.meta.url),
+    "utf8",
+  );
+  const pageSource = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(analyticsSource, /G-FXY385FDWN/u);
+  assert.match(analyticsSource, /https:\/\/exe7203\.github\.io/u);
+  assert.match(componentSource, /quicknavAnalyticsInitialized/u);
+  assert.match(componentSource, /allow_google_signals: false/u);
+  assert.match(componentSource, /allow_ad_personalization_signals: false/u);
+  assert.match(componentSource, /ignore_referrer: true/u);
+  assert.match(
+    componentSource,
+    /page_location: `\$\{window\.location\.origin\}\/`/u,
+  );
+  assert.equal(
+    componentSource.match(/window\.gtag\("config"/gu)?.length,
+    1,
+  );
+  assert.doesNotMatch(componentSource, /window\.location\.(?:search|hash|href)/u);
+  assert.doesNotMatch(componentSource, /gtag\("event",\s*"page_view"/u);
+  assert.doesNotMatch(
+    analyticsSource,
+    /\b(?:raw|address|query|maps_url|link_url|search_term|user_id)\s*:/u,
+  );
+  assert.match(pageSource, /dispatch_paste_click/u);
+  assert.match(pageSource, /dispatch_parse_result/u);
+  assert.match(pageSource, /maps_open_click/u);
+  assert.match(pageSource, /pwa_install_flow/u);
+  assert.doesNotMatch(pageSource, /href=\{(?:result\.mapsUrl|buildMapsUrl)/u);
+  assert.match(
+    pageSource,
+    /僅統計使用事件；派單、地址與座標不會送出/u,
+  );
+});
+
+test("the site discloses analytics and local data use", async () => {
+  const pageSource = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const privacySource = await readFile(
+    new URL("../app/privacy/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const exporterSource = await readFile(
+    new URL("../build/export-static.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(pageSource, /href="\/privacy\/"/u);
+  assert.match(privacySource, /Google Analytics 4/u);
+  assert.match(privacySource, /Cookie/u);
+  assert.match(privacySource, /派單原文、地址、座標/u);
+  assert.match(privacySource, /設定保留 14 個月/u);
+  assert.match(privacySource, /Google 合作夥伴網站資料使用說明/u);
+  assert.match(privacySource, /github\.com\/exe7203\/exe7203\.github\.io\/issues/u);
+  assert.match(privacySource, /最後更新：2026 年 8 月 13 日/u);
+  assert.match(exporterSource, /renderRoute\("\/privacy"\)/u);
+  assert.match(exporterSource, /path\.join\(outputDir, "privacy", "index\.html"\)/u);
 });
 
 test("share-target text is one-time and expires from local cache", async () => {
@@ -118,8 +192,8 @@ test("pasted destinations are kept locally after the current input is cleared", 
   assert.match(pageSource, /rememberAddress\(parsed\)/u);
   assert.match(pageSource, /已清除目前內容；最近地址仍保留/u);
   assert.match(pageSource, /最近地址/u);
-  assert.match(pageSource, /href=\{buildMapsUrl\(entry\.address\)\}/u);
-  assert.match(pageSource, /target="_blank"/u);
+  assert.match(pageSource, /openMapsUrl\(buildMapsUrl\(entry\.address\)\)/u);
+  assert.match(pageSource, /window\.open\(url, "_blank", "noopener,noreferrer"\)/u);
   assert.match(historySource, /quicknav-address-history-v1/u);
   assert.doesNotMatch(historySource, /raw:/u);
 });

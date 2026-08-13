@@ -366,6 +366,119 @@ test("navigates a valid DMS coordinate pair and removes known metadata", () => {
   assert.equal(canQuickNavigate(result), true);
 });
 
+test("parses the second fleet direct-fare coordinate payload", () => {
+  const result = parseDispatch(
+    "1/苗栗(24.3718263, 120.9674298) 直1500 💚百回+20🔫50錶",
+    "台中市",
+  );
+
+  assert.equal(result.query, "24.3718263,120.9674298");
+  assert.equal(result.kind, "coordinates");
+  assert.equal(result.status, "review");
+  assert.deepEqual(result.prefixes, ["1/"]);
+  assert.deepEqual(result.suffixes, ["💚百回+20", "🔫50錶"]);
+  assert.equal(result.note, "苗栗；直1500");
+  assert.deepEqual(result.additions, []);
+  assert.match(result.warnings.join(" "), /備註/u);
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(
+    new URL(result.mapsUrl).searchParams.get("destination"),
+    "24.3718263,120.9674298",
+  );
+  assert.equal(canQuickNavigate(result), false);
+});
+
+test("parses the second fleet highway coordinate payload", () => {
+  const result = parseDispatch(
+    "154/霧峰(24.0229133, 120.6793830)走國道⬇️太平 💚百回+20🔫50錶",
+    "台中市",
+  );
+
+  assert.equal(result.query, "24.0229133,120.6793830");
+  assert.equal(result.kind, "coordinates");
+  assert.equal(result.status, "review");
+  assert.deepEqual(result.prefixes, ["154/"]);
+  assert.deepEqual(result.suffixes, ["💚百回+20", "🔫50錶"]);
+  assert.equal(result.note, "霧峰；走國道⬇️太平");
+  assert.deepEqual(result.additions, []);
+  assert.match(result.warnings.join(" "), /備註/u);
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(
+    new URL(result.mapsUrl).searchParams.get("destination"),
+    "24.0229133,120.6793830",
+  );
+  assert.equal(canQuickNavigate(result), false);
+});
+
+test("keeps a normalized decimal coordinate navigable when loaded from history", () => {
+  for (const coordinate of [
+    "24.3718263,120.9674298",
+    "24.0229133,120.6793830",
+  ]) {
+    const result = parseDispatch(coordinate, "台中市");
+    assert.equal(result.query, coordinate);
+    assert.equal(result.kind, "coordinates");
+    assert.equal(result.status, "ready");
+    assert.equal(result.mapsMode, "directions");
+    assert.equal(canQuickNavigate(result), true);
+  }
+
+  assert.equal(
+    new URL(buildMapsUrl("(24.0229133, 120.6793830)")).pathname,
+    "/maps/dir/",
+  );
+});
+
+test("does not treat an ordinary numeric slash as a second-fleet prefix", () => {
+  const ordinaryAddress = parseDispatch("1/2巷3號", "台中市");
+  assert.deepEqual(ordinaryAddress.prefixes, []);
+  assert.equal(ordinaryAddress.query, "1/2巷3號");
+  assert.equal(canQuickNavigate(ordinaryAddress), false);
+
+  const addressWithCoordinateNote = parseDispatch(
+    "1/2巷3號 (24.3718263, 120.9674298)",
+    "台中市",
+  );
+  assert.deepEqual(addressWithCoordinateNote.prefixes, []);
+  assert.equal(addressWithCoordinateNote.query, "1/2巷3號");
+  assert.equal(
+    addressWithCoordinateNote.note,
+    "24.3718263, 120.9674298",
+  );
+  assert.equal(canQuickNavigate(addressWithCoordinateNote), false);
+
+  const repeatedNumericSlash = parseDispatch(
+    "1/2/苗栗(24.3718263, 120.9674298)",
+    "台中市",
+  );
+  assert.deepEqual(repeatedNumericSlash.prefixes, []);
+  assert.equal(repeatedNumericSlash.query, "24.3718263,120.9674298");
+  assert.equal(repeatedNumericSlash.note?.startsWith("1/2/苗栗"), true);
+  assert.equal(canQuickNavigate(repeatedNumericSlash), false);
+});
+
+test("rejects multiple, out-of-bounds, or swapped decimal coordinates", () => {
+  const multiple = parseDispatch(
+    "1/苗栗(24.3718263, 120.9674298) (24.0229133, 120.6793830)",
+    "台中市",
+  );
+  assert.deepEqual(multiple.prefixes, []);
+  assert.equal(multiple.mapsMode, "search");
+  assert.equal(canQuickNavigate(multiple), false);
+  assert.match(multiple.warnings.join(" "), /多組座標/u);
+
+  for (const input of [
+    "1/苗栗(91.0001, 120.9674298)",
+    "1/苗栗(120.9674298, 24.3718263)",
+  ]) {
+    const result = parseDispatch(input, "台中市");
+    assert.deepEqual(result.prefixes, [], input);
+    assert.equal(result.mapsMode, "search", input);
+    assert.equal(canQuickNavigate(result), false, input);
+    assert.match(result.warnings.join(" "), /座標格式超出/u, input);
+  }
+});
+
 test("keeps coordinate context visible for review", () => {
   const result = parseDispatch(
     "*8926/西屯 24°10′17.6″N 120°39′07.3″E🐟回20",

@@ -600,6 +600,12 @@ select:focus-visible {
   color: #afd0ea;
 }
 
+.chips.metadata span {
+  border: 1px solid #444a50;
+  background: #25292d;
+  color: #d9dde0;
+}
+
 .result-actions {
   display: grid;
   gap: 10px;
@@ -755,6 +761,70 @@ select:focus-visible {
 .history-delete-button:active,
 .history-address:active {
   background: #25282b;
+}
+
+.site-footer {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 14px;
+}
+
+.site-footer a,
+.privacy-back,
+.privacy-document a {
+  color: #aeb4b9;
+  text-underline-offset: 3px;
+}
+
+.site-footer a {
+  font-size: 12px;
+}
+
+.privacy-page {
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  background: var(--canvas);
+}
+
+.privacy-document {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.privacy-eyebrow,
+.privacy-updated {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.privacy-eyebrow {
+  margin: 28px 0 6px;
+  letter-spacing: 0.14em;
+}
+
+.privacy-document h1 {
+  margin: 0;
+  font-size: clamp(28px, 8vw, 42px);
+}
+
+.privacy-document section {
+  margin-top: 28px;
+}
+
+.privacy-document h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.privacy-document p {
+  margin: 0 0 10px;
+  color: #c5c9cc;
+  line-height: 1.75;
 }
 
 @media (min-width: 680px) {

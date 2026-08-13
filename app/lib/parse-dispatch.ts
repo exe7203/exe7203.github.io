@@ -52,8 +52,20 @@ const doorNumberAnywhere = new RegExp(doorNumberSource, "gu");
 const landmarkWords =
   /(車站|高鐵|捷運|機場|醫院|診所|飯店|旅館|會館|公園|學校|大學|幼兒園|百貨|市場|門市|超商|全聯|全家|萊爾富|康是美|7-ELEVEN|KTV)/iu;
 const knownSuffixSource =
-  "(?:(?:🐟|💣|🖤|🦈|🐶|🐭|🍪|🌿|💛|🍅|🐒)(?:回20|百回)|百回(?:[+-]\\d+)?)";
+  "(?:💚百回(?:[+-]\\d+)?|🔫\\d+錶|(?:🐟|💣|🖤|🦈|🐶|🐭|🍪|🌿|💛|🍅|🐒)(?:回20|百回)|百回(?:[+-]\\d+)?)";
 const dmsPairSource = String.raw`(\d{1,2})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([NS])\s*[,，]?\s*(\d{1,3})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([EW])`;
+const decimalPairSource = String.raw`(?:\(\s*([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+)\s*\)|([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+))`;
+
+interface CoordinateMatch {
+  text: string;
+  normalized: string;
+  index: number;
+  length: number;
+  valid: boolean;
+  count: number;
+  format: "dms" | "decimal";
+  parenthesized: boolean;
+}
 
 function isStructuredStarPrefix(segment: string): boolean {
   if (!segment.startsWith("*")) return false;
@@ -80,12 +92,16 @@ function isKnownPrefix(segment: string): boolean {
   );
 }
 
-function peelPrefixes(input: string): {
+function peelPrefixes(
+  input: string,
+  allowShortNumericPrefix = false,
+): {
   remaining: string;
   prefixes: string[];
 } {
   let remaining = input;
   const prefixes: string[] = [];
+  let shortNumericPrefixAvailable = allowShortNumericPrefix;
 
   const inlineDispatch = remaining.match(/^\s*(\*回派)\s+/u);
   if (inlineDispatch) {
@@ -96,9 +112,12 @@ function peelPrefixes(input: string): {
   while (remaining.includes("/")) {
     const slash = remaining.indexOf("/");
     const segment = remaining.slice(0, slash).trim();
-    if (!segment || !isKnownPrefix(segment)) break;
+    const isShortNumericPrefix =
+      shortNumericPrefixAvailable && /^[1-9]\d{0,2}$/u.test(segment);
+    if (!segment || (!isKnownPrefix(segment) && !isShortNumericPrefix)) break;
     prefixes.push(`${segment}/`);
     remaining = remaining.slice(slash + 1).trimStart();
+    if (isShortNumericPrefix) shortNumericPrefixAvailable = false;
   }
 
   return { remaining, prefixes };
@@ -183,13 +202,7 @@ function mergeNotes(...notes: Array<string | null>): string | null {
   return values.length > 0 ? values.join("；") : null;
 }
 
-function findDmsCoordinates(input: string): {
-  text: string;
-  index: number;
-  length: number;
-  valid: boolean;
-  count: number;
-} | null {
+function findDmsCoordinates(input: string): CoordinateMatch | null {
   const matches = [...input.matchAll(new RegExp(dmsPairSource, "giu"))];
   if (matches.length === 0) return null;
 
@@ -215,16 +228,80 @@ function findDmsCoordinates(input: string): {
 
   return {
     text: first[0].replace(/\s+/gu, " ").trim(),
+    normalized: first[0].replace(/\s+/gu, " ").trim(),
     index: first.index ?? 0,
     length: first[0].length,
     valid: latitudeValid && longitudeValid,
     count: matches.length,
+    format: "dms",
+    parenthesized: false,
   };
+}
+
+function findDecimalCoordinates(input: string): CoordinateMatch | null {
+  const matches = [
+    ...input.matchAll(new RegExp(decimalPairSource, "gu")),
+  ];
+  const first = matches[0];
+  if (!first) return null;
+
+  const latitudeText = first[1] ?? first[3];
+  const longitudeText = first[2] ?? first[4];
+  const latitude = Number(latitudeText);
+  const longitude = Number(longitudeText);
+  const valid =
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180;
+
+  return {
+    text: first[0].trim(),
+    normalized: `${latitudeText},${longitudeText}`,
+    index: first.index ?? 0,
+    length: first[0].length,
+    valid,
+    count: matches.length,
+    format: "decimal",
+    parenthesized: first[1] !== undefined,
+  };
+}
+
+function findCoordinates(input: string): CoordinateMatch | null {
+  const dms = findDmsCoordinates(input);
+  const decimal = findDecimalCoordinates(input);
+  const count = (dms?.count ?? 0) + (decimal?.count ?? 0);
+  if (count === 0) return null;
+
+  const candidates = [dms, decimal]
+    .filter((candidate): candidate is CoordinateMatch => Boolean(candidate))
+    .sort((left, right) => left.index - right.index);
+
+  return { ...candidates[0], count };
+}
+
+function hasSingleValidParenthesizedDecimalCoordinate(input: string): boolean {
+  const fleetPrefix = input.match(
+    /^\s*[1-9]\d{0,2}\/\p{Script=Han}{1,4}(?=\s*\()/u,
+  );
+  if (!fleetPrefix) return false;
+
+  const decimal = findDecimalCoordinates(input);
+  return Boolean(
+    decimal &&
+      decimal.valid &&
+      decimal.count === 1 &&
+      decimal.parenthesized &&
+      input.slice(fleetPrefix[0].length, decimal.index).trim() === "" &&
+      !findDmsCoordinates(input),
+  );
 }
 
 export function getMapsMode(query: string): MapsMode {
   const normalized = query.replace(/\s+/gu, " ").trim();
-  const coordinates = findDmsCoordinates(normalized);
+  const coordinates = findCoordinates(normalized);
   const isSingleCoordinate = Boolean(
     coordinates &&
       coordinates.valid &&
@@ -286,7 +363,10 @@ export function parseDispatch(
     };
   }
 
-  const prefixResult = peelPrefixes(raw);
+  const prefixResult = peelPrefixes(
+    raw,
+    hasSingleValidParenthesizedDecimalCoordinate(raw),
+  );
   const clockResult = peelLeadingClock(prefixResult.remaining);
   const prefixes = clockResult.prefix
     ? [...prefixResult.prefixes, clockResult.prefix]
@@ -296,7 +376,7 @@ export function parseDispatch(
   let note = mergeNotes(noteResult.note, suffixResult.note);
   let query = noteResult.remaining.replace(/\s+/gu, " ").trim();
 
-  const coordinates = findDmsCoordinates(query);
+  const coordinates = findCoordinates(query);
   let coordinateReady = false;
   if (coordinates) {
     if (coordinates.count > 1) {
@@ -305,13 +385,22 @@ export function parseDispatch(
       warnings.push("座標格式超出可導航範圍，請確認數值");
     } else {
       const coordinateEnd = coordinates.index + coordinates.length;
-      const context = `${query.slice(0, coordinates.index)} ${query.slice(
-        coordinateEnd,
-      )}`
+      const contextBefore = query
+        .slice(0, coordinates.index)
         .replace(/\s+/gu, " ")
         .trim();
-      query = coordinates.text;
-      note = mergeNotes(context || null, note);
+      const contextAfter = query
+        .slice(coordinateEnd)
+        .replace(/\s+/gu, " ")
+        .trim();
+      query = coordinates.normalized;
+      note =
+        coordinates.format === "decimal"
+          ? mergeNotes(contextBefore || null, contextAfter || null, note)
+          : mergeNotes(
+              `${contextBefore} ${contextAfter}`.trim() || null,
+              note,
+            );
       coordinateReady = true;
     }
   }
