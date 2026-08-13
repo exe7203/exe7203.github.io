@@ -109,9 +109,13 @@ export default function Home() {
   const [clipboardBlocked, setClipboardBlocked] = useState(false);
   const [isReadingClipboard, setIsReadingClipboard] = useState(false);
   const [pasteSide, setPasteSide] = useState<PasteSide>("right");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [addressHistory, setAddressHistory] = useState<AddressHistoryEntry[]>([]);
   const historyReadyRef = useRef(false);
   const resultCardRef = useRef<HTMLElement>(null);
+  const settingsDialogRef = useRef<HTMLDialogElement>(null);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
+  const settingsCloseRef = useRef<HTMLButtonElement>(null);
 
   const parseText = useCallback(
     (text: string) => {
@@ -193,6 +197,25 @@ export default function Home() {
 
     return () => window.clearTimeout(restorePasteSideTimer);
   }, []);
+
+  useEffect(() => {
+    const dialog = settingsDialogRef.current;
+    if (!dialog) return;
+
+    let focusFrame: number | undefined;
+    if (settingsOpen && !dialog.open) {
+      dialog.showModal();
+      focusFrame = window.requestAnimationFrame(() => {
+        settingsCloseRef.current?.focus({ preventScroll: true });
+      });
+    } else if (!settingsOpen && dialog.open) {
+      dialog.close();
+    }
+
+    return () => {
+      if (focusFrame !== undefined) window.cancelAnimationFrame(focusFrame);
+    };
+  }, [settingsOpen]);
 
   useEffect(() => {
     let restoreCityTimer: number | undefined;
@@ -306,6 +329,22 @@ export default function Home() {
       // The current selection still works when storage is blocked.
     }
     setNotice(`貼鍵已移到${side === "left" ? "左側" : "右側"}`);
+  }
+
+  function closeSettings() {
+    const dialog = settingsDialogRef.current;
+    if (dialog?.open) {
+      dialog.close();
+      return;
+    }
+    setSettingsOpen(false);
+  }
+
+  function handleSettingsClosed() {
+    setSettingsOpen(false);
+    window.requestAnimationFrame(() => {
+      settingsTriggerRef.current?.focus({ preventScroll: true });
+    });
   }
 
   async function readClipboardText(): Promise<string | null> {
@@ -459,40 +498,105 @@ export default function Home() {
           <div>
             <h1>快導</h1>
           </div>
-        </div>
-        <div className="handedness-row">
-          <div
-            className="handedness-control"
-            role="group"
-            aria-label="貼上按鈕位置"
+          <button
+            ref={settingsTriggerRef}
+            className="settings-trigger"
+            type="button"
+            aria-label="設定"
+            aria-controls="quicknav-settings"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen(true)}
+            title="設定"
           >
-            <span className="handedness-label">貼鍵</span>
+            <span aria-hidden="true">⚙︎</span>
+          </button>
+        </div>
+      </header>
+
+      <dialog
+        id="quicknav-settings"
+        ref={settingsDialogRef}
+        className="settings-dialog"
+        aria-labelledby="settings-title"
+        onClose={handleSettingsClosed}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) closeSettings();
+        }}
+      >
+        <div className="settings-dialog-content">
+          <div className="settings-dialog-heading">
+            <h2 id="settings-title">設定</h2>
             <button
-              className="handedness-option"
+              ref={settingsCloseRef}
+              className="settings-close"
               type="button"
-              aria-pressed={pasteSide === "left"}
-              onClick={() => handlePasteSideChange("left")}
+              aria-label="關閉設定"
+              onClick={closeSettings}
             >
-              左手
-            </button>
-            <button
-              className="handedness-option"
-              type="button"
-              aria-pressed={pasteSide === "right"}
-              onClick={() => handlePasteSideChange("right")}
-            >
-              右手
+              <span aria-hidden="true">×</span>
             </button>
           </div>
-        </div>
-        {!isStandalone && installPrompt && (
-          <div className="install-row">
-            <button className="install-button" onClick={() => void installApp()}>
+          <div className="setting-row">
+            <span id="paste-side-label" className="setting-label">
+              貼鍵位置
+            </span>
+            <div
+              className="handedness-control"
+              role="group"
+              aria-labelledby="paste-side-label"
+            >
+              <button
+                className="handedness-option"
+                type="button"
+                aria-pressed={pasteSide === "left"}
+                onClick={() => handlePasteSideChange("left")}
+              >
+                左手
+              </button>
+              <button
+                className="handedness-option"
+                type="button"
+                aria-pressed={pasteSide === "right"}
+                onClick={() => handlePasteSideChange("right")}
+              >
+                右手
+              </button>
+            </div>
+          </div>
+          <div className="setting-row">
+            <label htmlFor="default-city">地址缺少縣市時</label>
+            <select
+              id="default-city"
+              value={defaultCity}
+              onChange={(event) => handleCityChange(event.target.value)}
+            >
+              <option value="台中市">補上台中市</option>
+              <option value="">不要自動補上</option>
+            </select>
+          </div>
+          {!isStandalone && installPrompt ? (
+            <button
+              className="install-button settings-install-button"
+              onClick={() => void installApp()}
+              type="button"
+            >
               ＋ 安裝快導
             </button>
-          </div>
-        )}
-      </header>
+          ) : !isStandalone ? (
+            <p className="install-help">
+              {isIos
+                ? "iPhone 可由分享選單加入主畫面"
+                : "可由瀏覽器選單加入主畫面"}
+            </p>
+          ) : null}
+          <p className="install-help">
+            僅統計使用事件；派單、地址與座標不會送出
+          </p>
+          <Link className="settings-privacy-link" href="/privacy/">
+            隱私與資料使用
+          </Link>
+        </div>
+      </dialog>
 
       <div className="content-stack">
         <section className="card input-card" aria-labelledby="input-title">
@@ -583,30 +687,6 @@ export default function Home() {
             </p>
           )}
 
-          <details className="settings-panel">
-            <summary>設定</summary>
-            <div className="setting-row">
-              <label htmlFor="default-city">地址缺少縣市時</label>
-              <select
-                id="default-city"
-                value={defaultCity}
-                onChange={(event) => handleCityChange(event.target.value)}
-              >
-                <option value="台中市">補上台中市</option>
-                <option value="">不要自動補上</option>
-              </select>
-            </div>
-            {!isStandalone && !installPrompt && (
-              <p className="install-help">
-                {isIos
-                  ? "iPhone 可由分享選單加入主畫面"
-                  : "可由瀏覽器選單加入主畫面"}
-              </p>
-            )}
-            <p className="install-help">
-              僅統計使用事件；派單、地址與座標不會送出
-            </p>
-          </details>
         </section>
 
         {raw.trim() && (
