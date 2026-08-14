@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import {
   GA_MEASUREMENT_ID,
+  createGtagQueue,
   getLaunchMode,
   isAnalyticsEnabled,
+  queueAnalyticsInitialization,
   trackAnalyticsEvent,
 } from "./lib/analytics";
 
@@ -18,20 +20,8 @@ export default function GoogleAnalytics() {
     window.quicknavAnalyticsInitialized = true;
 
     window.dataLayer = window.dataLayer ?? [];
-    window.gtag =
-      window.gtag ??
-      ((...args: unknown[]) => {
-        window.dataLayer?.push(args);
-      });
-    window.gtag("js", new Date());
-    window.gtag("config", GA_MEASUREMENT_ID, {
-      allow_ad_personalization_signals: false,
-      allow_google_signals: false,
-      ignore_referrer: true,
-      page_location: `${window.location.origin}/`,
-      page_title: "快導",
-      send_page_view: true,
-    });
+    window.gtag = window.gtag ?? createGtagQueue(window.dataLayer);
+    queueAnalyticsInitialization(window.gtag);
 
     if (!document.getElementById(scriptId)) {
       const script = document.createElement("script");

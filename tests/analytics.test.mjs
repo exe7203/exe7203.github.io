@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   GA_MEASUREMENT_ID,
   GA_ORIGIN,
+  createGtagQueue,
   getLaunchMode,
   isAnalyticsEnabled,
+  queueAnalyticsInitialization,
   trackAnalyticsEvent,
 } from "../app/lib/analytics.ts";
 
@@ -30,6 +32,56 @@ test("GA4 is tied to the exact formal QuickNav origin and a valid measurement ID
   assert.equal(GA_ORIGIN, "https://exe7203.github.io");
   assert.match(GA_MEASUREMENT_ID, /^G-[A-Z0-9]{10}$/u);
   assert.equal(isAnalyticsEnabled(), false);
+});
+
+test("queued GA4 initialization and custom events use Google's Arguments shape", () => {
+  const dataLayer = [];
+
+  withMockWindow(
+    {
+      location: { origin: GA_ORIGIN },
+      matchMedia: () => ({ matches: false }),
+      navigator: {},
+      dataLayer,
+      gtag: createGtagQueue(dataLayer),
+    },
+    () => {
+      queueAnalyticsInitialization(window.gtag);
+      trackAnalyticsEvent({
+        name: "dispatch_paste_click",
+        params: { launch_mode: "browser" },
+      });
+    },
+  );
+
+  assert.equal(dataLayer.length, 3);
+  for (const command of dataLayer) {
+    assert.equal(Object.prototype.toString.call(command), "[object Arguments]");
+    assert.equal(Array.isArray(command), false);
+  }
+
+  const [jsCommand, configCommand, eventCommand] = dataLayer.map((command) =>
+    Array.from(command),
+  );
+  assert.equal(jsCommand[0], "js");
+  assert.ok(jsCommand[1] instanceof Date);
+  assert.deepEqual(configCommand, [
+    "config",
+    GA_MEASUREMENT_ID,
+    {
+      allow_ad_personalization_signals: false,
+      allow_google_signals: false,
+      ignore_referrer: true,
+      page_location: `${GA_ORIGIN}/`,
+      page_title: "快導",
+      send_page_view: true,
+    },
+  ]);
+  assert.deepEqual(eventCommand, [
+    "event",
+    "dispatch_paste_click",
+    { launch_mode: "browser" },
+  ]);
 });
 
 test("local previews and blocked analytics remain no-op", () => {

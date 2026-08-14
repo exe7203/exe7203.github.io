@@ -121,19 +121,23 @@ test("GA4 measures formal-site usage without collecting dispatch content", async
   assert.match(analyticsSource, /G-FXY385FDWN/u);
   assert.match(analyticsSource, /https:\/\/exe7203\.github\.io/u);
   assert.match(componentSource, /quicknavAnalyticsInitialized/u);
-  assert.match(componentSource, /allow_google_signals: false/u);
-  assert.match(componentSource, /allow_ad_personalization_signals: false/u);
-  assert.match(componentSource, /ignore_referrer: true/u);
+  assert.match(componentSource, /queueAnalyticsInitialization\(window\.gtag\)/u);
+  assert.match(analyticsSource, /allow_google_signals: false/u);
+  assert.match(analyticsSource, /allow_ad_personalization_signals: false/u);
+  assert.match(analyticsSource, /ignore_referrer: true/u);
   assert.match(
-    componentSource,
-    /page_location: `\$\{window\.location\.origin\}\/`/u,
+    analyticsSource,
+    /page_location: `\$\{GA_ORIGIN\}\/`/u,
   );
   assert.equal(
-    componentSource.match(/window\.gtag\("config"/gu)?.length,
+    analyticsSource.match(/gtag\("config"/gu)?.length,
     1,
   );
-  assert.doesNotMatch(componentSource, /window\.location\.(?:search|hash|href)/u);
-  assert.doesNotMatch(componentSource, /gtag\("event",\s*"page_view"/u);
+  assert.doesNotMatch(
+    `${analyticsSource}\n${componentSource}`,
+    /window\.location\.(?:search|hash|href)/u,
+  );
+  assert.doesNotMatch(analyticsSource, /gtag\("event",\s*"page_view"/u);
   assert.doesNotMatch(
     analyticsSource,
     /\b(?:raw|address|query|maps_url|link_url|search_term|user_id)\s*:/u,

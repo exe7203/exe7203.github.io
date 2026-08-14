@@ -55,6 +55,28 @@ declare global {
   }
 }
 
+type Gtag = (...args: unknown[]) => void;
+
+export function createGtagQueue(dataLayer: unknown[]): Gtag {
+  return function gtag() {
+    // Google Tag requires the native Arguments object, not a rest-parameter array.
+    // eslint-disable-next-line prefer-rest-params
+    dataLayer.push(arguments);
+  };
+}
+
+export function queueAnalyticsInitialization(gtag: Gtag): void {
+  gtag("js", new Date());
+  gtag("config", GA_MEASUREMENT_ID, {
+    allow_ad_personalization_signals: false,
+    allow_google_signals: false,
+    ignore_referrer: true,
+    page_location: `${GA_ORIGIN}/`,
+    page_title: "快導",
+    send_page_view: true,
+  });
+}
+
 export function isAnalyticsEnabled(): boolean {
   return (
     typeof window !== "undefined" &&
