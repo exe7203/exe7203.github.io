@@ -28,13 +28,18 @@ const literalPrefixCodes = new Set([
   "蜜蜂",
   "澤",
   "@",
+  "@1",
+  "00",
+  "配",
+  "法",
+  "北",
   "77",
   "1@",
 ]);
 const numericLikeStarBody = /^[+-]?[\d.]+$/u;
 const numericStarBody = /^(\d{1,5})(?:\.([1-9]))?$/u;
 const structuredStarBody = /^[^*/\s]{1,16}$/u;
-const wPrefixCode = /^W(?:[1-9]\d?)?$/iu;
+const wPrefixCode = /^W(?:[1-9]\d?|100)?$/iu;
 const clockPrefixCode = /^(?:[01]?\d|2[0-3])[:：.．][0-5]\d$/u;
 const leadingClockPrefix =
   /^\s*((?:[01]?\d|2[0-3])[:：.．][0-5]\d)(\/|\s*)/u;
@@ -44,6 +49,12 @@ const taichungDistrictStart =
   /^(?:北屯|西屯|南屯|太平|大里|霧峰|烏日|豐原|后里|石岡|東勢|和平|新社|潭子|大雅|神岡|大肚|沙鹿|龍井|梧棲|清水|大甲|外埔|大安|中|東|南|西|北)區/u;
 const doorNumberSource = String.raw`\d+(?:(?:之|-)\d+)?號(?:\d+樓)?`;
 const completeDoorNumber = new RegExp(`${doorNumberSource}$`, "u");
+const roadAddressWithDoorNumber = new RegExp(
+  String.raw`^[\p{Script=Han}]{1,20}(?:路|街|道)(?:[一二三四五六七八九十百\d]{1,3}段)?\d{1,5}(?:(?:之|-)\d{1,3})?號(?:\d+樓)?$`,
+  "u",
+);
+const roadAddressMissingDoorNumber =
+  /^[\p{Script=Han}]{1,20}(?:路|街|道)(?:[一二三四五六七八九十百\d]{1,3}段)?\d{1,5}(?:(?:之|-)\d{1,3})?$/u;
 const fullQuickAddress =
   /^(?:基隆|台北|臺北|新北|桃園|新竹|苗栗|台中|臺中|彰化|南投|雲林|嘉義|台南|臺南|高雄|屏東|宜蘭|花蓮|台東|臺東|澎湖|金門|連江)(?:縣|市)[\p{Script=Han}]{1,3}(?:區|鄉|鎮|市).*(?:路|街|道|段|巷|弄|村|里|鄰).*\d+(?:(?:之|-)\d+)?號(?:\d+樓)?$/u;
 const cityOrCountyAnywhere =
@@ -52,7 +63,7 @@ const doorNumberAnywhere = new RegExp(doorNumberSource, "gu");
 const landmarkWords =
   /(車站|高鐵|捷運|機場|醫院|診所|飯店|旅館|會館|公園|學校|大學|幼兒園|百貨|市場|門市|超商|全聯|全家|萊爾富|康是美|7-ELEVEN|KTV)/iu;
 const knownSuffixSource =
-  "(?:💚百回(?:[+-]\\d+)?|🔫\\d+錶|(?:🐟|💣|🖤|🦈|🐶|🐭|🍪|🌿|💛|🍅|🐒)(?:回20|百回)|百回(?:[+-]\\d+)?)";
+  "(?:🟢免百回\\s+幫救|🔴70錶\\s+全免回傭❗|💚百回(?:[+-]\\d+)?|🔫\\d+錶|(?:🐟|💣|🖤|🦈|🐶|🐭|🍪|🌿|💛|🍅|🐒)(?:回20|百回)|百回(?:[+-]\\d+)?)";
 const dmsPairSource = String.raw`(\d{1,2})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([NS])\s*[,，]?\s*(\d{1,3})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([EW])`;
 const decimalPairSource = String.raw`(?:\(\s*([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+)\s*\)|([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+))`;
 
@@ -202,6 +213,42 @@ function mergeNotes(...notes: Array<string | null>): string | null {
   return values.length > 0 ? values.join("；") : null;
 }
 
+function isStandaloneAddressWithDoorNumber(input: string): boolean {
+  const normalized = input.replace(/\s+/gu, " ").trim();
+  const cityCount = normalized.match(cityOrCountyAnywhere)?.length ?? 0;
+  const doorNumberCount = normalized.match(doorNumberAnywhere)?.length ?? 0;
+
+  return (
+    completeDoorNumber.test(normalized) &&
+    cityCount <= 1 &&
+    doorNumberCount === 1 &&
+    (cityOrCounty.test(normalized) ||
+      taichungDistrictStart.test(normalized) ||
+      roadAddressWithDoorNumber.test(normalized))
+  );
+}
+
+function splitLeadingAddressNote(input: string): {
+  remaining: string;
+  note: string | null;
+} {
+  const normalized = input.replace(/\s+/gu, " ").trim();
+  const match = normalized.match(/^([\p{Script=Han}]{1,12})\s+(.+)$/u);
+  if (!match) return { remaining: input, note: null };
+
+  const label = match[1];
+  const destination = match[2];
+  if (
+    cityOrCounty.test(label) ||
+    taichungDistrictStart.test(label) ||
+    !isStandaloneAddressWithDoorNumber(destination)
+  ) {
+    return { remaining: input, note: null };
+  }
+
+  return { remaining: destination, note: label };
+}
+
 function findDmsCoordinates(input: string): CoordinateMatch | null {
   const matches = [...input.matchAll(new RegExp(dmsPairSource, "giu"))];
   if (matches.length === 0) return null;
@@ -282,6 +329,44 @@ function findCoordinates(input: string): CoordinateMatch | null {
   return { ...candidates[0], count };
 }
 
+function getDispatchDestinationCandidate(input: string): string {
+  const suffixResult = peelSuffixes(input);
+  const trailingNoteResult = splitTrailingNote(suffixResult.remaining);
+  const leadingNoteResult = splitLeadingAddressNote(
+    trailingNoteResult.remaining,
+  );
+  return leadingNoteResult.remaining.replace(/\s+/gu, " ").trim();
+}
+
+function isClearAddressDestination(input: string): boolean {
+  const destination = getDispatchDestinationCandidate(input);
+  return (
+    isStandaloneAddressWithDoorNumber(destination) ||
+    roadAddressMissingDoorNumber.test(destination)
+  );
+}
+
+function isClearDispatchDestination(input: string): boolean {
+  const destination = getDispatchDestinationCandidate(input);
+  const coordinates = findCoordinates(destination);
+  const hasSingleValidCoordinate = Boolean(
+    coordinates && coordinates.valid && coordinates.count === 1,
+  );
+
+  return (
+    hasSingleValidCoordinate ||
+    isStandaloneAddressWithDoorNumber(destination) ||
+    roadAddressMissingDoorNumber.test(destination)
+  );
+}
+
+function hasUnstarredNumericPrefixFollowedByDestination(
+  input: string,
+): boolean {
+  const match = input.match(/^\s*[1-9]\d{0,2}\/\s*(.+)$/u);
+  return Boolean(match && isClearAddressDestination(match[1]));
+}
+
 function hasSingleValidParenthesizedDecimalCoordinate(input: string): boolean {
   const fleetPrefix = input.match(
     /^\s*[1-9]\d{0,2}\/\p{Script=Han}{1,4}(?=\s*\()/u,
@@ -321,6 +406,95 @@ function hasNumericDispatchPrefixFollowedByClockAndAddress(
   );
 }
 
+function canPeelUnstarredNumericPrefix(input: string): boolean {
+  return (
+    hasSingleValidParenthesizedDecimalCoordinate(input) ||
+    hasNumericDispatchPrefixFollowedByClockAndAddress(input) ||
+    hasUnstarredNumericPrefixFollowedByDestination(input)
+  );
+}
+
+function hasClearPrefixedDispatchPayload(input: string): boolean {
+  const prefixResult = peelPrefixes(
+    input,
+    canPeelUnstarredNumericPrefix(input),
+  );
+  if (prefixResult.prefixes.length === 0) return false;
+
+  const clockResult = peelLeadingClock(prefixResult.remaining);
+  return isClearDispatchDestination(clockResult.remaining);
+}
+
+function hasTrustedPrefixedPayload(input: string): boolean {
+  const prefixResult = peelPrefixes(input, false);
+  if (prefixResult.prefixes.length === 0) return false;
+
+  const clockResult = peelLeadingClock(prefixResult.remaining);
+  return clockResult.remaining.trim().length >= 2;
+}
+
+function matchLineEnvelope(input: string): {
+  payload: string;
+  sender: string;
+} | null {
+  const match = input.match(
+    /^\s*(?:[01]?\d|2[0-3])[:：][0-5]\d\s+([^\s/]{1,20})\s+(.+)$/u,
+  );
+  if (!match) return null;
+
+  const sender = match[1];
+  if (cityOrCounty.test(sender) || taichungDistrictStart.test(sender)) {
+    return null;
+  }
+
+  return { sender, payload: match[2].trim() };
+}
+
+function peelLineEnvelope(input: string): {
+  remaining: string;
+  stripped: boolean;
+} {
+  const envelope = matchLineEnvelope(input);
+  if (
+    !envelope ||
+    (!hasClearPrefixedDispatchPayload(envelope.payload) &&
+      !hasTrustedPrefixedPayload(envelope.payload))
+  ) {
+    return { remaining: input, stripped: false };
+  }
+
+  return { remaining: envelope.payload, stripped: true };
+}
+
+function isLineRecall(input: string): boolean {
+  return (
+    /^\s*(?:已)?(?:收回|撤回)訊息\s*$/u.test(input) ||
+    /^\s*(?:[01]?\d|2[0-3])[:：][0-5]\d\s+\S{0,20}(?:已)?(?:收回|撤回)訊息\s*$/u.test(
+      input,
+    )
+  );
+}
+
+function isLineChatNoise(input: string): boolean {
+  const envelope = matchLineEnvelope(input);
+  return Boolean(envelope && !envelope.payload.includes("/"));
+}
+
+function countClearDispatchRows(input: string): number {
+  return input
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      const envelopeResult = peelLineEnvelope(line);
+      return (
+        envelopeResult.stripped ||
+        hasClearPrefixedDispatchPayload(line) ||
+        isClearDispatchDestination(line)
+      );
+    }).length;
+}
+
 export function getMapsMode(query: string): MapsMode {
   const normalized = query.replace(/\s+/gu, " ").trim();
   const coordinates = findCoordinates(normalized);
@@ -352,6 +526,22 @@ export function buildMapsUrl(query: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
 }
 
+function buildInvalidResult(raw: string, warning: string): ParsedDispatch {
+  return {
+    raw,
+    query: "",
+    status: "invalid",
+    kind: "unknown",
+    prefixes: [],
+    suffixes: [],
+    note: null,
+    additions: [],
+    warnings: [warning],
+    mapsMode: "search",
+    mapsUrl: buildMapsUrl(""),
+  };
+}
+
 export function canQuickNavigate(result: ParsedDispatch): boolean {
   return (
     result.status === "ready" &&
@@ -370,25 +560,26 @@ export function parseDispatch(
   const additions: string[] = [];
 
   if (!raw) {
-    return {
-      raw,
-      query: "",
-      status: "invalid",
-      kind: "unknown",
-      prefixes: [],
-      suffixes: [],
-      note: null,
-      additions,
-      warnings: ["尚未貼上派單文字"],
-      mapsMode: "search",
-      mapsUrl: buildMapsUrl(""),
-    };
+    return buildInvalidResult(raw, "尚未貼上派單文字");
   }
 
+  if (isLineRecall(raw)) {
+    return buildInvalidResult(raw, "這是已收回／撤回的 LINE 訊息");
+  }
+
+  if (isLineChatNoise(raw)) {
+    return buildInvalidResult(raw, "這段 LINE 文字不像派單地址");
+  }
+
+  if (countClearDispatchRows(raw) > 1) {
+    return buildInvalidResult(raw, "偵測到多筆派單，請一次貼上一筆");
+  }
+
+  const envelopeResult = peelLineEnvelope(raw);
+  const dispatchInput = envelopeResult.remaining;
   const prefixResult = peelPrefixes(
-    raw,
-    hasSingleValidParenthesizedDecimalCoordinate(raw) ||
-      hasNumericDispatchPrefixFollowedByClockAndAddress(raw),
+    dispatchInput,
+    canPeelUnstarredNumericPrefix(dispatchInput),
   );
   const clockResult = peelLeadingClock(prefixResult.remaining);
   const prefixes = clockResult.prefix
@@ -396,8 +587,15 @@ export function parseDispatch(
     : prefixResult.prefixes;
   const suffixResult = peelSuffixes(clockResult.remaining);
   const noteResult = splitTrailingNote(suffixResult.remaining);
-  let note = mergeNotes(noteResult.note, suffixResult.note);
-  let query = noteResult.remaining.replace(/\s+/gu, " ").trim();
+  const leadingNoteResult = splitLeadingAddressNote(noteResult.remaining);
+  let note = mergeNotes(
+    leadingNoteResult.note,
+    noteResult.note,
+    suffixResult.note,
+  );
+  let query = leadingNoteResult.remaining.replace(/\s+/gu, " ").trim();
+  const suspectedMissingDoorNumber =
+    roadAddressMissingDoorNumber.test(query);
 
   const coordinates = findCoordinates(query);
   let coordinateReady = false;
@@ -472,6 +670,9 @@ export function parseDispatch(
         );
       }
     }
+  } else if (suspectedMissingDoorNumber) {
+    kind = "address";
+    warnings.push("地址疑似缺少「號」，請確認完整門牌");
   } else if (landmarkWords.test(query)) {
     kind = "landmark";
     warnings.push("這是地標／方位描述，請先確認 Google Maps 搜尋結果");

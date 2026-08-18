@@ -127,6 +127,50 @@ test("supports the documented prefix and signed return-fee formats", () => {
   }
 });
 
+test("supports the explicit unstarred fleet head-code ranges", () => {
+  const validPrefixes = [
+    "@1/",
+    "00/",
+    "配/",
+    "法/",
+    "安/",
+    "北/",
+    ...Array.from({ length: 999 }, (_, index) => `${index + 1}/`),
+    ...Array.from({ length: 100 }, (_, index) => `W${index + 1}/`),
+  ];
+
+  for (const prefix of validPrefixes) {
+    const result = parseDispatch(
+      `${prefix}台中市北區興進路205號`,
+      "台中市",
+    );
+    assert.equal(result.query, "台中市北區興進路205號", prefix);
+    assert.deepEqual(result.prefixes, [prefix], prefix);
+    assert.equal(result.status, "ready", prefix);
+    assert.equal(result.mapsMode, "directions", prefix);
+    assert.equal(canQuickNavigate(result), true, prefix);
+  }
+
+  for (const prefix of [
+    "0/",
+    "01/",
+    "000/",
+    "1000/",
+    "W0/",
+    "W101/",
+    "@2/",
+    "未知/",
+  ]) {
+    const result = parseDispatch(
+      `${prefix}台中市北區興進路205號`,
+      "台中市",
+    );
+    assert.deepEqual(result.prefixes, [], prefix);
+    assert.equal(result.query.startsWith(prefix), true, prefix);
+    assert.equal(canQuickNavigate(result), false, prefix);
+  }
+});
+
 test("accepts the complete documented numeric star-prefix range", () => {
   const validPrefixes = [
     "*1/",
@@ -195,8 +239,8 @@ test("supports structural dispatch codes found in the supplied samples", () => {
   }
 });
 
-test("supports W, W1 through W99 as unstarred head codes", () => {
-  for (const code of ["W", "W1", "W6", "W99", "w30"]) {
+test("supports W, W1 through W100 as unstarred head codes", () => {
+  for (const code of ["W", "W1", "W6", "W99", "W100", "w30"]) {
     const prefix = `${code}/`;
     const result = parseDispatch(
       `${prefix}台中市北區興進路205號`,
@@ -206,7 +250,7 @@ test("supports W, W1 through W99 as unstarred head codes", () => {
     assert.equal(result.query, "台中市北區興進路205號", prefix);
   }
 
-  for (const code of ["W0", "W100", "WX"]) {
+  for (const code of ["W0", "W101", "WX"]) {
     const prefix = `${code}/`;
     const result = parseDispatch(
       `${prefix}台中市北區興進路205號`,
@@ -301,7 +345,6 @@ test("removes the guarded numeric dispatch code when a known suffix follows the 
 
 test("keeps an unstarred numeric slash when the clock or address guard is incomplete", () => {
   for (const input of [
-    "32/后里區大興路202號",
     "32/24:00 后里區大興路202號",
     "32/25:20 后里區大興路202號",
     "32/17:20",
@@ -344,6 +387,184 @@ test("removes each documented emoji return suffix", () => {
       assert.deepEqual(result.suffixes, [suffix], suffix);
       assert.equal(canQuickNavigate(result), true, suffix);
     }
+  }
+});
+
+test("removes each explicit fleet suffix without adding it to the destination", () => {
+  const cases = [
+    {
+      suffix: "💚百回+20🔫50錶",
+      expected: ["💚百回+20", "🔫50錶"],
+    },
+    {
+      suffix: "💚百回+50🔫50錶",
+      expected: ["💚百回+50", "🔫50錶"],
+    },
+    {
+      suffix: "🟢免百回 幫救🔫50錶",
+      expected: ["🟢免百回 幫救", "🔫50錶"],
+    },
+    {
+      suffix: "🔴70錶 全免回傭❗",
+      expected: ["🔴70錶 全免回傭❗"],
+    },
+  ];
+
+  for (const sample of cases) {
+    const result = parseDispatch(
+      `@1/台中市北區興進路205號 ${sample.suffix}`,
+      "台中市",
+    );
+    assert.equal(result.query, "台中市北區興進路205號", sample.suffix);
+    assert.deepEqual(result.suffixes, sample.expected, sample.suffix);
+    assert.equal(result.note, null, sample.suffix);
+    assert.equal(result.status, "ready", sample.suffix);
+    assert.equal(canQuickNavigate(result), true, sample.suffix);
+  }
+});
+
+test("parses the four supplied LINE dispatch rows", () => {
+  const cases = [
+    {
+      input: "23:36 政 143/文心路四段823 💚百回+20🔫50錶",
+      query: "文心路四段823",
+      prefixes: ["143/"],
+      suffixes: ["💚百回+20", "🔫50錶"],
+      note: null,
+      additions: [],
+      mapsMode: "search",
+      warning: /疑似缺少.*號/u,
+    },
+    {
+      input: "23:36 政 1/真善美 東區東英路195號 💚百回+20🔫50錶",
+      query: "台中市東區東英路195號",
+      prefixes: ["1/"],
+      suffixes: ["💚百回+20", "🔫50錶"],
+      note: "真善美",
+      additions: ["台中市"],
+      mapsMode: "directions",
+      warning: null,
+    },
+    {
+      input: "23:36 政 64/北區青島東街7號 💚百回+20🔫50錶",
+      query: "台中市北區青島東街7號",
+      prefixes: ["64/"],
+      suffixes: ["💚百回+20", "🔫50錶"],
+      note: null,
+      additions: ["台中市"],
+      mapsMode: "directions",
+      warning: null,
+    },
+    {
+      input: "23:36 政 W5/北區青島東街7號 💚百回+20🔫50錶",
+      query: "台中市北區青島東街7號",
+      prefixes: ["W5/"],
+      suffixes: ["💚百回+20", "🔫50錶"],
+      note: null,
+      additions: ["台中市"],
+      mapsMode: "directions",
+      warning: null,
+    },
+  ];
+
+  for (const sample of cases) {
+    const result = parseDispatch(sample.input, "台中市");
+    assert.equal(result.query, sample.query, sample.input);
+    assert.deepEqual(result.prefixes, sample.prefixes, sample.input);
+    assert.deepEqual(result.suffixes, sample.suffixes, sample.input);
+    assert.equal(result.note, sample.note, sample.input);
+    assert.deepEqual(result.additions, sample.additions, sample.input);
+    assert.equal(result.kind, "address", sample.input);
+    assert.equal(result.status, "review", sample.input);
+    assert.equal(result.mapsMode, sample.mapsMode, sample.input);
+    assert.equal(canQuickNavigate(result), false, sample.input);
+    if (sample.warning) {
+      assert.match(result.warnings.join(" "), sample.warning, sample.input);
+    }
+  }
+});
+
+test("removes a LINE envelope before trusted landmark and alias prefixes", () => {
+  const cases = [
+    {
+      input: "16:38 政 *75/台中火車站大智北💣回20",
+      query: "台中火車站大智北",
+      prefix: "*75/",
+      suffixes: ["💣回20"],
+      kind: "landmark",
+    },
+    {
+      input: "16:38 政 *TG/巨六",
+      query: "巨六",
+      prefix: "*TG/",
+      suffixes: [],
+      kind: "unknown",
+    },
+  ];
+
+  for (const sample of cases) {
+    const result = parseDispatch(sample.input, "台中市");
+    assert.equal(result.query, sample.query, sample.input);
+    assert.deepEqual(result.prefixes, [sample.prefix], sample.input);
+    assert.deepEqual(result.suffixes, sample.suffixes, sample.input);
+    assert.equal(result.kind, sample.kind, sample.input);
+    assert.equal(result.status, "review", sample.input);
+    assert.equal(result.mapsMode, "search", sample.input);
+    assert.equal(canQuickNavigate(result), false, sample.input);
+  }
+});
+
+test("rejects LINE chat noise and recalled messages with an empty destination", () => {
+  for (const input of [
+    "23:36 政已收回訊息",
+    "已收回訊息",
+    "撤回訊息",
+    "23:36 政 越大車隊",
+    "23:37 政 不然車隊本身後勤會負荷不來",
+  ]) {
+    const result = parseDispatch(input, "台中市");
+    assert.equal(result.query, "", input);
+    assert.deepEqual(result.prefixes, [], input);
+    assert.deepEqual(result.suffixes, [], input);
+    assert.equal(result.status, "invalid", input);
+    assert.equal(result.mapsMode, "search", input);
+    assert.equal(canQuickNavigate(result), false, input);
+  }
+});
+
+test("does not accept an invalid LINE clock or a row containing multiple addresses", () => {
+  for (const input of [
+    "25:20 政 64/北區青島東街7號 💚百回+20🔫50錶",
+    "23:36 政 64/台中市北區興進路205號 台中市西屯區臺灣大道三段99號 💚百回+20🔫50錶",
+  ]) {
+    const result = parseDispatch(input, "台中市");
+    assert.equal(result.status, "review", input);
+    assert.equal(result.mapsMode, "search", input);
+    assert.equal(canQuickNavigate(result), false, input);
+  }
+});
+
+test("fails closed when pasted text contains more than one valid dispatch row", () => {
+  const inputs = [
+    [
+      "23:36 政 64/北區青島東街7號 💚百回+20🔫50錶",
+      "23:37 政 W5/北區青島東街7號 💚百回+20🔫50錶",
+    ].join("\n"),
+    [
+      "台中市北區興進路205號 💚百回+20🔫50錶",
+      "台中市西屯區臺灣大道三段99號 💚百回+20🔫50錶",
+    ].join("\n"),
+  ];
+
+  for (const input of inputs) {
+    const result = parseDispatch(input, "台中市");
+    assert.equal(result.query, "", input);
+    assert.deepEqual(result.prefixes, [], input);
+    assert.deepEqual(result.suffixes, [], input);
+    assert.equal(result.status, "invalid", input);
+    assert.equal(result.mapsMode, "search", input);
+    assert.equal(canQuickNavigate(result), false, input);
+    assert.match(result.warnings.join(" "), /一次貼上一筆/u, input);
   }
 });
 
