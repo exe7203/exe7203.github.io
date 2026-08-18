@@ -266,6 +266,58 @@ test("removes attached time codes after known prefixes", () => {
   }
 });
 
+test("removes an unstarred numeric dispatch code only before a valid clock and address", () => {
+  const result = parseDispatch(
+    "32/ 17:20 后里區大興路202號",
+    "台中市",
+  );
+
+  assert.equal(result.query, "台中市后里區大興路202號");
+  assert.deepEqual(result.prefixes, ["32/", "17:20"]);
+  assert.deepEqual(result.additions, ["台中市"]);
+  assert.equal(result.kind, "address");
+  assert.equal(result.status, "review");
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(canQuickNavigate(result), false);
+  assert.equal(
+    new URL(result.mapsUrl).searchParams.get("destination"),
+    "台中市后里區大興路202號",
+  );
+});
+
+test("removes the guarded numeric dispatch code when a known suffix follows the address", () => {
+  const result = parseDispatch(
+    "32/17:20 后里區大興路202號💣回20",
+    "台中市",
+  );
+
+  assert.equal(result.query, "台中市后里區大興路202號");
+  assert.deepEqual(result.prefixes, ["32/", "17:20"]);
+  assert.deepEqual(result.suffixes, ["💣回20"]);
+  assert.equal(result.status, "review");
+  assert.equal(result.mapsMode, "directions");
+  assert.equal(canQuickNavigate(result), false);
+});
+
+test("keeps an unstarred numeric slash when the clock or address guard is incomplete", () => {
+  for (const input of [
+    "32/后里區大興路202號",
+    "32/24:00 后里區大興路202號",
+    "32/25:20 后里區大興路202號",
+    "32/17:20",
+    "32/17:20 稍等",
+    "32/17:20 台中火車站",
+    "32/17:20 后里區大興路",
+  ]) {
+    const result = parseDispatch(input, "台中市");
+    assert.deepEqual(result.prefixes, [], input);
+    assert.equal(result.query, input, input);
+    assert.equal(result.status, "review", input);
+    assert.equal(result.mapsMode, "search", input);
+    assert.equal(canQuickNavigate(result), false, input);
+  }
+});
+
 test("does not remove invalid time-like text", () => {
   for (const timeCode of ["24:00", "23:60", "1:5"]) {
     const result = parseDispatch(

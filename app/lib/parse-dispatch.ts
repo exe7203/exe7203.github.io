@@ -299,6 +299,28 @@ function hasSingleValidParenthesizedDecimalCoordinate(input: string): boolean {
   );
 }
 
+function hasNumericDispatchPrefixFollowedByClockAndAddress(
+  input: string,
+): boolean {
+  const numericPrefix = input.match(/^\s*[1-9]\d{0,2}\/\s*/u);
+  if (!numericPrefix) return false;
+
+  const afterPrefix = input.slice(numericPrefix[0].length);
+  const clock = afterPrefix.match(leadingClockPrefix);
+  if (!clock) return false;
+
+  const destinationWithSuffix = afterPrefix
+    .slice(clock[0].length)
+    .replace(/\s+/gu, " ")
+    .trim();
+  const destination = peelSuffixes(destinationWithSuffix).remaining;
+
+  return (
+    completeDoorNumber.test(destination) &&
+    (cityOrCounty.test(destination) || taichungDistrictStart.test(destination))
+  );
+}
+
 export function getMapsMode(query: string): MapsMode {
   const normalized = query.replace(/\s+/gu, " ").trim();
   const coordinates = findCoordinates(normalized);
@@ -365,7 +387,8 @@ export function parseDispatch(
 
   const prefixResult = peelPrefixes(
     raw,
-    hasSingleValidParenthesizedDecimalCoordinate(raw),
+    hasSingleValidParenthesizedDecimalCoordinate(raw) ||
+      hasNumericDispatchPrefixFollowedByClockAndAddress(raw),
   );
   const clockResult = peelLeadingClock(prefixResult.remaining);
   const prefixes = clockResult.prefix
