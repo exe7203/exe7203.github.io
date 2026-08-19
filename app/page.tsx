@@ -394,10 +394,23 @@ export default function Home() {
       rememberAddress(parsed);
       trackParsedDispatch("clipboard", parsed);
       setShowManualInput(false);
-      if (canQuickNavigate(parsed)) {
-        setNotice("已一鍵貼上並解析完成，請確認後開啟 Google Maps");
+      if (parsed.status !== "invalid") {
+        trackAnalyticsEvent({
+          name: "maps_open_click",
+          params: {
+            entry_point: "auto_paste",
+            launch_mode: getLaunchMode(),
+            maps_mode: parsed.mapsMode,
+            parse_status: parsed.status,
+            query_kind: parsed.kind,
+          },
+        });
+        openMapsUrl(parsed.mapsUrl);
+        setNotice(
+          "已一鍵貼上並嘗試開啟 Google Maps；若沒有跳轉，請按下方按鈕",
+        );
       } else {
-        setNotice("已一鍵貼上；這筆有需要確認的內容，請先核對");
+        setNotice("已一鍵貼上；這筆無法開啟地圖，請補上可導航地址");
       }
       revealResult();
     } finally {

@@ -183,6 +183,45 @@ test("formal-site events only contain low-cardinality usage fields", () => {
   );
 });
 
+test("automatic map opening is recorded without destination content", () => {
+  const calls = [];
+  withMockWindow(
+    {
+      location: { origin: GA_ORIGIN },
+      matchMedia: () => ({ matches: false }),
+      navigator: {},
+      gtag: (...args) => calls.push(args),
+    },
+    () => {
+      trackAnalyticsEvent({
+        name: "maps_open_click",
+        params: {
+          entry_point: "auto_paste",
+          launch_mode: "browser",
+          maps_mode: "directions",
+          parse_status: "review",
+          query_kind: "address",
+        },
+      });
+    },
+  );
+
+  assert.deepEqual(calls, [
+    [
+      "event",
+      "maps_open_click",
+      {
+        entry_point: "auto_paste",
+        launch_mode: "browser",
+        maps_mode: "directions",
+        parse_status: "review",
+        query_kind: "address",
+      },
+    ],
+  ]);
+  assert.doesNotMatch(JSON.stringify(calls), /地址|座標|maps\/dir|maps\/search/iu);
+});
+
 test("standalone launch detection uses browser display signals", () => {
   withMockWindow(
     {

@@ -235,6 +235,9 @@ test("one button reads and parses the clipboard while manual input stays an erro
 
   assert.match(pageSource, /const text = await readClipboardText\(\)/u);
   assert.match(pageSource, /const parsed = parseText\(text\)/u);
+  assert.match(pageSource, /entry_point: "auto_paste"/u);
+  assert.match(pageSource, /openMapsUrl\(parsed\.mapsUrl\)/u);
+  assert.match(pageSource, /若沒有跳轉，請按下方按鈕/u);
   assert.match(pageSource, /setShowManualInput\(true\)/u);
   assert.match(pageSource, /瀏覽器沒有授權一鍵貼上/u);
   assert.doesNotMatch(pageSource, /manualPasteShouldNavigate/u);

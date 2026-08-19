@@ -35,7 +35,7 @@ type AnalyticsEvent =
   | {
       name: "maps_open_click";
       params: {
-        entry_point: "current_result" | "history";
+        entry_point: "auto_paste" | "current_result" | "history";
         launch_mode: LaunchMode;
         maps_mode: "directions" | "search";
         parse_status: "ready" | "review" | "invalid" | "history";
