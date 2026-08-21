@@ -329,6 +329,33 @@ test("removes an unstarred numeric dispatch code only before a valid clock and a
   );
 });
 
+test("removes return-dispatch markers after an unstarred fleet code", () => {
+  const cases = [
+    { input: "1/回/大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回/" },
+    { input: "1/回派/大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回派/" },
+    { input: "1/回派 大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回派 " },
+    { input: "1/回 大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回 " },
+    { input: "1/回派&#x20;大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回派 " },
+  ];
+
+  for (const { input, marker } of cases) {
+    const result = parseDispatch(input, "台中市");
+    assert.equal(result.query, "台中市大里區新和路62號", input);
+    assert.deepEqual(result.prefixes, ["1/", marker], input);
+    assert.deepEqual(result.suffixes, ["💚百回+20", "🔫50錶"], input);
+    assert.deepEqual(result.additions, ["台中市"], input);
+    assert.equal(result.mapsMode, "directions", input);
+    assert.equal(canQuickNavigate(result), false, input);
+  }
+});
+
+test("does not mistake unrelated text for a return-dispatch marker", () => {
+  const result = parseDispatch("1/不變", "台中市");
+  assert.equal(result.query, "1/不變");
+  assert.deepEqual(result.prefixes, []);
+  assert.equal(result.status, "review");
+});
+
 test("removes the guarded numeric dispatch code when a known suffix follows the address", () => {
   const result = parseDispatch(
     "32/17:20 后里區大興路202號💣回20",

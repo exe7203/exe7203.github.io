@@ -47,6 +47,8 @@ const cityOrCounty =
   /^(?:基隆|台北|臺北|新北|桃園|新竹|苗栗|台中|臺中|彰化|南投|雲林|嘉義|台南|臺南|高雄|屏東|宜蘭|花蓮|台東|臺東|澎湖|金門|連江)(?:縣|市)/u;
 const taichungDistrictStart =
   /^(?:北屯|西屯|南屯|太平|大里|霧峰|烏日|豐原|后里|石岡|東勢|和平|新社|潭子|大雅|神岡|大肚|沙鹿|龍井|梧棲|清水|大甲|外埔|大安|中|東|南|西|北)區/u;
+const taichungDistrictShorthandStart =
+  /^(北屯|西屯|南屯|太平|大里|霧峰|烏日|豐原|后里|石岡|東勢|和平|新社|潭子|大雅|神岡|大肚|沙鹿|龍井|梧棲|清水|大甲|外埔|大安)(?!區)(?=[\p{Script=Han}]{1,20}(?:路|街|道))/u;
 const doorNumberSource = String.raw`\d+(?:(?:之|-)\d+)?號(?:\d+樓)?`;
 const completeDoorNumber = new RegExp(`${doorNumberSource}$`, "u");
 const roadAddressWithDoorNumber = new RegExp(
@@ -66,6 +68,7 @@ const knownSuffixSource =
   "(?:🟢免百回\\s+幫救|🔴70錶\\s+全免回傭❗|💚百回(?:[+-]\\d+)?|🔫\\d+錶|(?:🐟|💣|🖤|🦈|🐶|🐭|🍪|🌿|💛|🍅|🐒)(?:回20|百回)|百回(?:[+-]\\d+)?)";
 const dmsPairSource = String.raw`(\d{1,2})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([NS])\s*[,，]?\s*(\d{1,3})°\s*(\d{1,2})['′]\s*(\d{1,2}(?:\.\d+)?)['"″]\s*([EW])`;
 const decimalPairSource = String.raw`(?:\(\s*([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+)\s*\)|([+-]?\d{1,3}\.\d+)\s*[,，]\s*([+-]?\d{1,3}\.\d+))`;
+const pastedHtmlSpace = /&#x(?:20|32);|&nbsp;/giu;
 
 interface CoordinateMatch {
   text: string;
@@ -103,6 +106,17 @@ function isKnownPrefix(segment: string): boolean {
   );
 }
 
+function getTaichungDistrictShorthand(input: string): string | null {
+  return input.match(taichungDistrictShorthandStart)?.[1] ?? null;
+}
+
+function startsWithTaichungDistrict(input: string): boolean {
+  return (
+    taichungDistrictStart.test(input) ||
+    getTaichungDistrictShorthand(input) !== null
+  );
+}
+
 function peelPrefixes(
   input: string,
   allowShortNumericPrefix = false,
@@ -129,6 +143,16 @@ function peelPrefixes(
     prefixes.push(`${segment}/`);
     remaining = remaining.slice(slash + 1).trimStart();
     if (isShortNumericPrefix) shortNumericPrefixAvailable = false;
+
+    // Return-dispatch markers are metadata, not part of the map destination.
+    // Fleets send them with either a slash or a space after the marker.
+    const returnDispatchMarker = remaining.match(/^(回派|回)(\/|\s+)/u);
+    if (returnDispatchMarker) {
+      prefixes.push(
+        `${returnDispatchMarker[1]}${returnDispatchMarker[2] === "/" ? "/" : " "}`,
+      );
+      remaining = remaining.slice(returnDispatchMarker[0].length).trimStart();
+    }
   }
 
   return { remaining, prefixes };
@@ -223,7 +247,7 @@ function isStandaloneAddressWithDoorNumber(input: string): boolean {
     cityCount <= 1 &&
     doorNumberCount === 1 &&
     (cityOrCounty.test(normalized) ||
-      taichungDistrictStart.test(normalized) ||
+      startsWithTaichungDistrict(normalized) ||
       roadAddressWithDoorNumber.test(normalized))
   );
 }
@@ -240,7 +264,7 @@ function splitLeadingAddressNote(input: string): {
   const destination = match[2];
   if (
     cityOrCounty.test(label) ||
-    taichungDistrictStart.test(label) ||
+    startsWithTaichungDistrict(label) ||
     !isStandaloneAddressWithDoorNumber(destination)
   ) {
     return { remaining: input, note: null };
@@ -363,7 +387,9 @@ function isClearDispatchDestination(input: string): boolean {
 function hasUnstarredNumericPrefixFollowedByDestination(
   input: string,
 ): boolean {
-  const match = input.match(/^\s*[1-9]\d{0,2}\/\s*(.+)$/u);
+  const match = input.match(
+    /^\s*[1-9]\d{0,2}\/\s*(?:回派?\s*(?:\/|\s+))?(.+)$/u,
+  );
   return Boolean(match && isClearAddressDestination(match[1]));
 }
 
@@ -402,7 +428,7 @@ function hasNumericDispatchPrefixFollowedByClockAndAddress(
 
   return (
     completeDoorNumber.test(destination) &&
-    (cityOrCounty.test(destination) || taichungDistrictStart.test(destination))
+    (cityOrCounty.test(destination) || startsWithTaichungDistrict(destination))
   );
 }
 
@@ -443,7 +469,7 @@ function matchLineEnvelope(input: string): {
   if (!match) return null;
 
   const sender = match[1];
-  if (cityOrCounty.test(sender) || taichungDistrictStart.test(sender)) {
+  if (cityOrCounty.test(sender) || startsWithTaichungDistrict(sender)) {
     return null;
   }
 
@@ -555,7 +581,10 @@ export function parseDispatch(
   rawInput: string,
   defaultCity = "台中市",
 ): ParsedDispatch {
-  const raw = rawInput.replace(/\r\n?/gu, "\n").trim();
+  const raw = rawInput
+    .replace(pastedHtmlSpace, " ")
+    .replace(/\r\n?/gu, "\n")
+    .trim();
   const warnings: string[] = [];
   const additions: string[] = [];
 
@@ -630,10 +659,13 @@ export function parseDispatch(
     !coordinateReady &&
     defaultCity &&
     !cityOrCounty.test(query) &&
-    taichungDistrictStart.test(query) &&
+    startsWithTaichungDistrict(query) &&
     completeDoorNumber.test(query)
   ) {
-    query = `${defaultCity}${query}`;
+    const districtShorthand = getTaichungDistrictShorthand(query);
+    query = districtShorthand
+      ? `${defaultCity}${districtShorthand}區${query.slice(districtShorthand.length)}`
+      : `${defaultCity}${query}`;
     additions.push(defaultCity);
     warnings.push(`已依預設城市補上「${defaultCity}」`);
   }
