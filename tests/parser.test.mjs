@@ -329,6 +329,24 @@ test("removes an unstarred numeric dispatch code only before a valid clock and a
   );
 });
 
+test("removes an unstarred numeric dispatch code before a timed landmark", () => {
+  const result = parseDispatch(
+    "1/ 16:30 東海大學 女生宿舍門口 💚百回+20🔫50錶",
+    "台中市",
+  );
+
+  assert.equal(result.query, "東海大學 女生宿舍門口");
+  assert.deepEqual(result.prefixes, ["1/", "16:30"]);
+  assert.deepEqual(result.suffixes, ["💚百回+20", "🔫50錶"]);
+  assert.equal(result.kind, "landmark");
+  assert.equal(result.mapsMode, "search");
+  assert.equal(canQuickNavigate(result), false);
+  assert.equal(
+    new URL(result.mapsUrl).searchParams.get("query"),
+    "東海大學 女生宿舍門口",
+  );
+});
+
 test("removes return-dispatch markers after an unstarred fleet code", () => {
   const cases = [
     { input: "1/回/大里新和路62號 ⬇️彰化 💚百回+20🔫50錶", marker: "回/" },

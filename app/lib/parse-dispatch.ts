@@ -432,10 +432,32 @@ function hasNumericDispatchPrefixFollowedByClockAndAddress(
   );
 }
 
+function hasNumericDispatchPrefixFollowedByClockAndLandmark(
+  input: string,
+): boolean {
+  const numericPrefix = input.match(/^\s*[1-9]\d{0,2}\/\s*/u);
+  if (!numericPrefix) return false;
+
+  const afterPrefix = input.slice(numericPrefix[0].length);
+  const clock = afterPrefix.match(leadingClockPrefix);
+  if (!clock) return false;
+
+  const destination = peelSuffixes(
+    afterPrefix.slice(clock[0].length).replace(/\s+/gu, " ").trim(),
+  ).remaining;
+
+  return (
+    destination.length >= 3 &&
+    landmarkWords.test(destination) &&
+    /(門口|宿舍|大門|後門|前門|側門|入口|出口|校門)/u.test(destination)
+  );
+}
+
 function canPeelUnstarredNumericPrefix(input: string): boolean {
   return (
     hasSingleValidParenthesizedDecimalCoordinate(input) ||
     hasNumericDispatchPrefixFollowedByClockAndAddress(input) ||
+    hasNumericDispatchPrefixFollowedByClockAndLandmark(input) ||
     hasUnstarredNumericPrefixFollowedByDestination(input)
   );
 }
