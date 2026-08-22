@@ -223,6 +223,7 @@ test("pasted destinations are kept locally after the current input is cleared", 
   assert.match(pageSource, /最近地址/u);
   assert.match(pageSource, /openMapsUrl\(buildMapsUrl\(entry\.address\)\)/u);
   assert.match(pageSource, /window\.open\(url, "_blank", "noopener,noreferrer"\)/u);
+  assert.match(pageSource, /window\.location\.assign\(url\)/u);
   assert.match(historySource, /quicknav-address-history-v1/u);
   assert.doesNotMatch(historySource, /raw:/u);
 });
@@ -236,7 +237,10 @@ test("one button reads and parses the clipboard while manual input stays an erro
   assert.match(pageSource, /const text = await readClipboardText\(\)/u);
   assert.match(pageSource, /const parsed = parseText\(text\)/u);
   assert.match(pageSource, /entry_point: "auto_paste"/u);
-  assert.match(pageSource, /openMapsUrl\(parsed\.mapsUrl\)/u);
+  assert.match(pageSource, /openMapsUrl\(parsed\.mapsUrl, "same-tab"\)/u);
+  assert.match(pageSource, /readingClipboardRef\.current/u);
+  assert.match(pageSource, /pageshow/u);
+  assert.match(pageSource, /PASTE_UNLOCK_DELAY_MS/u);
   assert.match(pageSource, /若沒有跳轉，請按下方按鈕/u);
   assert.match(pageSource, /setShowManualInput\(true\)/u);
   assert.match(pageSource, /瀏覽器沒有授權一鍵貼上/u);
@@ -269,7 +273,7 @@ test("the driver-app handoff remains available in source while its home-page blo
   assert.match(handoffSource, /https:\/\/exe7203\.github\.io/u);
   assert.match(handoffSource, /\/driver\/dispatch/u);
   assert.doesNotMatch(pageSource, /buildDriverHandoff|開啟司機端開始跳錶/u);
-  assert.doesNotMatch(pageSource, /window\.location\.assign/u);
+  assert.match(pageSource, /window\.location\.assign\(url\)/u);
 });
 
 test("the App Link browser fallback remains useful without the driver app", async () => {

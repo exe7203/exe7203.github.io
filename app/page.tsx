@@ -92,9 +92,16 @@ function trackParsedDispatch(source: ParseSource, result: ParsedDispatch) {
   });
 }
 
-function openMapsUrl(url: string) {
+function openMapsUrl(url: string, mode: "new-tab" | "same-tab" = "new-tab") {
+  if (mode === "same-tab") {
+    window.location.assign(url);
+    return;
+  }
+
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+const PASTE_UNLOCK_DELAY_MS = 600;
 
 export default function Home() {
   const [defaultCity, setDefaultCity] = useState("台中市");
@@ -112,6 +119,8 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addressHistory, setAddressHistory] = useState<AddressHistoryEntry[]>([]);
   const historyReadyRef = useRef(false);
+  const readingClipboardRef = useRef(false);
+  const pasteUnlockTimerRef = useRef<number | undefined>(undefined);
   const resultCardRef = useRef<HTMLElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement>(null);
@@ -144,6 +153,25 @@ export default function Home() {
       });
     });
   }, []);
+
+  const releasePasteLock = useCallback(() => {
+    if (pasteUnlockTimerRef.current !== undefined) {
+      window.clearTimeout(pasteUnlockTimerRef.current);
+      pasteUnlockTimerRef.current = undefined;
+    }
+    readingClipboardRef.current = false;
+    setIsReadingClipboard(false);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("pageshow", releasePasteLock);
+    return () => {
+      window.removeEventListener("pageshow", releasePasteLock);
+      if (pasteUnlockTimerRef.current !== undefined) {
+        window.clearTimeout(pasteUnlockTimerRef.current);
+      }
+    };
+  }, [releasePasteLock]);
 
   useEffect(() => {
     const restoreHistoryTimer = window.setTimeout(() => {
@@ -380,7 +408,8 @@ export default function Home() {
   }
 
   async function handleQuickNavigate() {
-    if (isReadingClipboard) return;
+    if (isReadingClipboard || readingClipboardRef.current) return;
+    readingClipboardRef.current = true;
     trackAnalyticsEvent({
       name: "dispatch_paste_click",
       params: { launch_mode: getLaunchMode() },
@@ -405,16 +434,23 @@ export default function Home() {
             query_kind: parsed.kind,
           },
         });
-        openMapsUrl(parsed.mapsUrl);
+        // Clipboard access is asynchronous. iOS Safari / LINE's in-app
+        // browser turn a later window.open() into a blank page, especially
+        // on the second tap after returning from Maps.
+        openMapsUrl(parsed.mapsUrl, "same-tab");
         setNotice(
           "已一鍵貼上並嘗試開啟 Google Maps；若沒有跳轉，請按下方按鈕",
         );
-      } else {
-        setNotice("已一鍵貼上；這筆無法開啟地圖，請補上可導航地址");
+        return;
       }
+      setNotice("已一鍵貼上；這筆無法開啟地圖，請補上可導航地址");
       revealResult();
     } finally {
-      setIsReadingClipboard(false);
+      pasteUnlockTimerRef.current = window.setTimeout(() => {
+        readingClipboardRef.current = false;
+        setIsReadingClipboard(false);
+        pasteUnlockTimerRef.current = undefined;
+      }, PASTE_UNLOCK_DELAY_MS);
     }
   }
 
