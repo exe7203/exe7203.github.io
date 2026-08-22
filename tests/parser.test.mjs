@@ -882,6 +882,67 @@ test("keeps a destination note visible before navigation", () => {
   assert.equal(canQuickNavigate(result), false);
 });
 
+test("strips ride-service labels with or without a trailing slash", () => {
+  const labels = ["代駕", "代價", "跑腿", "霧電", "接電", "搬家"];
+  const address = "台中市北區興進路205號";
+
+  for (const label of labels) {
+    const samples = [
+      { input: `${label}${address}`, prefixes: [label] },
+      { input: `${label}/${address}`, prefixes: [`${label}/`] },
+      { input: `${label} ${address}`, prefixes: [label] },
+      { input: `*55/${label}${address}`, prefixes: ["*55/", label] },
+      { input: `*55/${label}/${address}`, prefixes: ["*55/", `${label}/`] },
+      {
+        input: `*55/私/${label}/${address}💣回20`,
+        prefixes: ["*55/", "私/", `${label}/`],
+      },
+      {
+        input: `32/17:20 ${label}${address}💣回20`,
+        prefixes: ["32/", "17:20", label],
+      },
+    ];
+
+    for (const sample of samples) {
+      const result = parseDispatch(sample.input, "台中市");
+      assert.equal(result.query, address, sample.input);
+      assert.deepEqual(result.prefixes, sample.prefixes, sample.input);
+      assert.deepEqual(
+        result.suffixes,
+        sample.input.includes("💣回20") ? ["💣回20"] : [],
+        sample.input,
+      );
+      assert.equal(canQuickNavigate(result), true, sample.input);
+    }
+  }
+});
+
+test("strips a spaced 代 service code without eating 代天府", () => {
+  const address = "台中市北區興進路205號";
+  const samples = [
+    { input: ` 代/${address}`, prefixes: ["代/"] },
+    { input: ` 代 ${address}`, prefixes: ["代"] },
+    { input: `代/${address}`, prefixes: ["代/"] },
+    { input: `代 ${address}`, prefixes: ["代"] },
+    { input: `代${address}`, prefixes: ["代"] },
+    { input: `*55/ 代${address}`, prefixes: ["*55/", "代"] },
+    { input: `*55/ 代/${address}`, prefixes: ["*55/", "代/"] },
+    { input: `*55/代/${address}`, prefixes: ["*55/", "代/"] },
+  ];
+
+  for (const sample of samples) {
+    const result = parseDispatch(sample.input, "台中市");
+    assert.equal(result.query, address, sample.input);
+    assert.deepEqual(result.prefixes, sample.prefixes, sample.input);
+    assert.equal(canQuickNavigate(result), true, sample.input);
+  }
+
+  const temple = parseDispatch("*55/代天府", "台中市");
+  assert.equal(temple.query, "代天府");
+  assert.deepEqual(temple.prefixes, ["*55/"]);
+  assert.equal(canQuickNavigate(temple), false);
+});
+
 test("does not remove unstructured text or invalid time-like prefix text", () => {
   for (const input of [
     "UNKNOWN/台中市北區興進路205號",

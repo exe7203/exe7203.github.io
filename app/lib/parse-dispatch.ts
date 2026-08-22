@@ -19,8 +19,13 @@ export interface ParsedDispatch {
 const literalPrefixCodes = new Set([
   "私",
   "斯",
+  "代駕",
   "代價",
+  "代",
   "跑腿",
+  "霧電",
+  "接電",
+  "搬家",
   "回",
   "Yo",
   "安",
@@ -36,6 +41,14 @@ const literalPrefixCodes = new Set([
   "77",
   "1@",
 ]);
+const serviceTypeLabels = [
+  "代駕",
+  "代價",
+  "跑腿",
+  "霧電",
+  "接電",
+  "搬家",
+] as const;
 const numericLikeStarBody = /^[+-]?[\d.]+$/u;
 const numericStarBody = /^(\d{1,5})(?:\.([1-9]))?$/u;
 const structuredStarBody = /^[^*/\s]{1,16}$/u;
@@ -106,6 +119,74 @@ function isKnownPrefix(segment: string): boolean {
   );
 }
 
+function canPeelConcatenatedDai(after: string): boolean {
+  const rest = after.trimStart();
+  if (!rest) return false;
+
+  return (
+    cityOrCounty.test(rest) ||
+    startsWithTaichungDistrict(rest) ||
+    rest.startsWith("*") ||
+    isClearDispatchDestination(rest)
+  );
+}
+
+function matchLeadingServiceType(input: string): {
+  prefix: string;
+  remaining: string;
+} | null {
+  const leadingWs = input.match(/^\s+/u)?.[0] ?? "";
+  const body = input.slice(leadingWs.length);
+  if (!body) return null;
+
+  for (const label of serviceTypeLabels) {
+    if (!body.startsWith(label)) continue;
+
+    const after = body.slice(label.length);
+    const slashSep = after.startsWith("/");
+    return {
+      prefix: slashSep ? `${label}/` : label,
+      remaining: (slashSep ? after.slice(1) : after).trimStart(),
+    };
+  }
+
+  if (!body.startsWith("代")) return null;
+
+  const after = body.slice(1);
+  const slashSep = after.startsWith("/");
+  const spaceSep = /^\s+/u.test(after);
+  if (
+    !slashSep &&
+    !spaceSep &&
+    leadingWs.length === 0 &&
+    !canPeelConcatenatedDai(after)
+  ) {
+    return null;
+  }
+
+  return {
+    prefix: slashSep ? "代/" : "代",
+    remaining: (slashSep ? after.slice(1) : after).trimStart(),
+  };
+}
+
+function peelServiceTypes(input: string): {
+  remaining: string;
+  prefixes: string[];
+} {
+  let remaining = input;
+  const prefixes: string[] = [];
+
+  while (true) {
+    const match = matchLeadingServiceType(remaining);
+    if (!match) break;
+    prefixes.push(match.prefix);
+    remaining = match.remaining;
+  }
+
+  return { remaining, prefixes };
+}
+
 function getTaichungDistrictShorthand(input: string): string | null {
   return input.match(taichungDistrictShorthandStart)?.[1] ?? null;
 }
@@ -115,6 +196,12 @@ function startsWithTaichungDistrict(input: string): boolean {
     taichungDistrictStart.test(input) ||
     getTaichungDistrictShorthand(input) !== null
   );
+}
+
+function takeServiceTypes(remaining: string, prefixes: string[]): string {
+  const serviceResult = peelServiceTypes(remaining);
+  prefixes.push(...serviceResult.prefixes);
+  return serviceResult.remaining;
 }
 
 function peelPrefixes(
@@ -134,6 +221,8 @@ function peelPrefixes(
     remaining = remaining.slice(inlineDispatch[0].length).trimStart();
   }
 
+  remaining = takeServiceTypes(remaining, prefixes);
+
   while (remaining.includes("/")) {
     const slash = remaining.indexOf("/");
     const segment = remaining.slice(0, slash).trim();
@@ -141,8 +230,11 @@ function peelPrefixes(
       shortNumericPrefixAvailable && /^[1-9]\d{0,2}$/u.test(segment);
     if (!segment || (!isKnownPrefix(segment) && !isShortNumericPrefix)) break;
     prefixes.push(`${segment}/`);
-    remaining = remaining.slice(slash + 1).trimStart();
+    remaining = remaining.slice(slash + 1);
     if (isShortNumericPrefix) shortNumericPrefixAvailable = false;
+
+    remaining = takeServiceTypes(remaining, prefixes);
+    remaining = remaining.trimStart();
 
     // Return-dispatch markers are metadata, not part of the map destination.
     // Fleets send them with either a slash or a space after the marker.
@@ -151,10 +243,28 @@ function peelPrefixes(
       prefixes.push(
         `${returnDispatchMarker[1]}${returnDispatchMarker[2] === "/" ? "/" : " "}`,
       );
-      remaining = remaining.slice(returnDispatchMarker[0].length).trimStart();
+      remaining = remaining.slice(returnDispatchMarker[0].length);
+      remaining = takeServiceTypes(remaining, prefixes).trimStart();
     }
   }
 
+  remaining = takeServiceTypes(remaining, prefixes);
+  return { remaining, prefixes };
+}
+
+function peelDispatchHead(
+  input: string,
+  allowShortNumericPrefix = false,
+): {
+  remaining: string;
+  prefixes: string[];
+} {
+  const prefixResult = peelPrefixes(input, allowShortNumericPrefix);
+  const clockResult = peelLeadingClock(prefixResult.remaining);
+  const prefixes = clockResult.prefix
+    ? [...prefixResult.prefixes, clockResult.prefix]
+    : [...prefixResult.prefixes];
+  const remaining = takeServiceTypes(clockResult.remaining, prefixes);
   return { remaining, prefixes };
 }
 
@@ -354,7 +464,8 @@ function findCoordinates(input: string): CoordinateMatch | null {
 }
 
 function getDispatchDestinationCandidate(input: string): string {
-  const suffixResult = peelSuffixes(input);
+  const serviceResult = peelServiceTypes(input);
+  const suffixResult = peelSuffixes(serviceResult.remaining);
   const trailingNoteResult = splitTrailingNote(suffixResult.remaining);
   const leadingNoteResult = splitLeadingAddressNote(
     trailingNoteResult.remaining,
@@ -424,7 +535,9 @@ function hasNumericDispatchPrefixFollowedByClockAndAddress(
     .slice(clock[0].length)
     .replace(/\s+/gu, " ")
     .trim();
-  const destination = peelSuffixes(destinationWithSuffix).remaining;
+  const destination = peelSuffixes(
+    peelServiceTypes(destinationWithSuffix).remaining,
+  ).remaining;
 
   return (
     completeDoorNumber.test(destination) &&
@@ -443,7 +556,9 @@ function hasNumericDispatchPrefixFollowedByClockAndLandmark(
   if (!clock) return false;
 
   const destination = peelSuffixes(
-    afterPrefix.slice(clock[0].length).replace(/\s+/gu, " ").trim(),
+    peelServiceTypes(
+      afterPrefix.slice(clock[0].length).replace(/\s+/gu, " ").trim(),
+    ).remaining,
   ).remaining;
 
   return (
@@ -463,22 +578,16 @@ function canPeelUnstarredNumericPrefix(input: string): boolean {
 }
 
 function hasClearPrefixedDispatchPayload(input: string): boolean {
-  const prefixResult = peelPrefixes(
+  const head = peelDispatchHead(
     input,
     canPeelUnstarredNumericPrefix(input),
   );
-  if (prefixResult.prefixes.length === 0) return false;
-
-  const clockResult = peelLeadingClock(prefixResult.remaining);
-  return isClearDispatchDestination(clockResult.remaining);
+  return head.prefixes.length > 0 && isClearDispatchDestination(head.remaining);
 }
 
 function hasTrustedPrefixedPayload(input: string): boolean {
-  const prefixResult = peelPrefixes(input, false);
-  if (prefixResult.prefixes.length === 0) return false;
-
-  const clockResult = peelLeadingClock(prefixResult.remaining);
-  return clockResult.remaining.trim().length >= 2;
+  const head = peelDispatchHead(input, false);
+  return head.prefixes.length > 0 && head.remaining.trim().length >= 2;
 }
 
 function matchLineEnvelope(input: string): {
@@ -628,15 +737,12 @@ export function parseDispatch(
 
   const envelopeResult = peelLineEnvelope(raw);
   const dispatchInput = envelopeResult.remaining;
-  const prefixResult = peelPrefixes(
+  const head = peelDispatchHead(
     dispatchInput,
     canPeelUnstarredNumericPrefix(dispatchInput),
   );
-  const clockResult = peelLeadingClock(prefixResult.remaining);
-  const prefixes = clockResult.prefix
-    ? [...prefixResult.prefixes, clockResult.prefix]
-    : prefixResult.prefixes;
-  const suffixResult = peelSuffixes(clockResult.remaining);
+  const prefixes = head.prefixes;
+  const suffixResult = peelSuffixes(head.remaining);
   const noteResult = splitTrailingNote(suffixResult.remaining);
   const leadingNoteResult = splitLeadingAddressNote(noteResult.remaining);
   let note = mergeNotes(
